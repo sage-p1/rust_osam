@@ -1,17 +1,18 @@
 [package]
-name = "oram"
+name = "osam"
 version = "0.2.0-pre.1"
 rust-version = "1.88"
 edition = "2021"
-repository = "https://github.com/facebook/oram"
-description = "An implementation of Oblivious RAM."
+repository = "https://github.com/sage-p1/rust_osam.git"
+description = "An implementation of Oblivious SAM."
 license = "MIT OR Apache-2.0"
 readme = "README.md"
-keywords = ["oram", "oblivious", "cryptography"]
+keywords = ["osam", "oblivious", "cryptography"]
 categories = ["cryptography"]
 
 
 [dependencies]
+bit_reverse = "0.1.8"
 subtle = "2"
 rand = "0.8"
 log = "0.4"

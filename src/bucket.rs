@@ -5,9 +5,9 @@
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 // of this source tree. You may select, at your option, one of the above-listed licenses.
 
-//! Block and bucket structures for Path ORAM.
+//! Block and bucket structures for Path OSAM.
 
-use crate::{BlockSize, OramBlock};
+use crate::{BlockSize, OsamBlock};
 use subtle::{Choice, ConditionallySelectable};
 
 use rand::{
@@ -17,11 +17,11 @@ use rand::{
 
 use crate::BucketSize;
 
-use crate::{utils::TreeIndex, Address};
+use crate::{utils::TreeIndex, Identifier};
 use subtle::ConstantTimeEq;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-/// An `OramBlock` consisting of unstructured bytes.
+/// An `OsamBlock` consisting of unstructured bytes.
 pub struct BlockValue<const B: BlockSize> {
     /// The block's data payload.
     pub data: [u8; B],
@@ -39,7 +39,7 @@ impl<const B: BlockSize> Default for BlockValue<B> {
     }
 }
 
-impl<const B: BlockSize> OramBlock for BlockValue<B> {}
+impl<const B: BlockSize> OsamBlock for BlockValue<B> {}
 
 impl<const B: BlockSize> ConditionallySelectable for BlockValue<B> {
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
@@ -62,21 +62,21 @@ impl<const B: BlockSize> Distribution<BlockValue<B>> for Standard {
 }
 
 #[derive(Clone, Copy, Default, PartialEq)]
-/// A Path ORAM block combines an `OramBlock` V with two metadata fields; its ORAM `address` and its `position` in the tree.
-pub(crate) struct PathOramBlock<V> {
+/// A Path OSAM block combines an `OsamBlock` V with two metadata fields; its OSAM `identifier` and its `position` in the tree.
+pub(crate) struct PathOsamBlock<V> {
     pub value: V,
-    pub address: Address,
+    pub identifier: Identifier,
     pub position: TreeIndex,
 }
 
-impl<V: OramBlock> PathOramBlock<V> {
-    const DUMMY_ADDRESS: Address = Address::MAX;
+impl<V: OsamBlock> PathOsamBlock<V> {
+    const DUMMY_IDENTIFIER: Identifier = Identifier::MAX;
     const DUMMY_POSITION: TreeIndex = 0;
 
     pub fn dummy() -> Self {
         Self {
             value: V::default(),
-            address: Self::DUMMY_ADDRESS,
+            identifier: Self::DUMMY_IDENTIFIER,
             position: Self::DUMMY_POSITION,
         }
     }
@@ -91,79 +91,43 @@ impl<V: OramBlock> PathOramBlock<V> {
     }
 }
 
-impl<V: OramBlock> std::fmt::Debug for PathOramBlock<V> {
+impl<V: OsamBlock> std::fmt::Debug for PathOsamBlock<V> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.ct_is_dummy().into() {
-            write!(f, "PathOramBlock::Dummy")
+            write!(f, "PathOsamBlock::Dummy")
         } else {
-            f.debug_struct("PathOramBlock")
+            f.debug_struct("PathOsamBlock")
                 .field("value", &self.value)
-                .field("address", &self.address)
+                .field("identifier", &self.identifier)
                 .field("position", &self.position)
                 .finish()
         }
     }
 }
 
-impl<V: OramBlock> OramBlock for PathOramBlock<V> {}
+impl<V: OsamBlock> OsamBlock for PathOsamBlock<V> {}
 
-impl<V: ConditionallySelectable> ConditionallySelectable for PathOramBlock<V> {
+impl<V: ConditionallySelectable> ConditionallySelectable for PathOsamBlock<V> {
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
         let value = V::conditional_select(&a.value, &b.value, choice);
-        let address = Address::conditional_select(&a.address, &b.address, choice);
+        let identifier = Identifier::conditional_select(&a.identifier, &b.identifier, choice);
         let position = TreeIndex::conditional_select(&a.position, &b.position, choice);
-        PathOramBlock::<V> {
+        PathOsamBlock::<V> {
             value,
-            address,
+            identifier,
             position,
         }
     }
 }
 
-#[repr(align(64))]
-#[derive(Clone, Copy, PartialEq, Debug)]
-/// An `OramBlock` storing addresses, intended for use in a position map ORAM.
-pub struct PositionBlock<const B: BlockSize> {
-    /// The Path ORAM positions stored in this block.
-    pub data: [TreeIndex; B],
-}
-
-impl<const B: BlockSize> Default for PositionBlock<B> {
-    fn default() -> Self {
-        Self { data: [0; B] }
-    }
-}
-
-impl<const B: BlockSize> ConditionallySelectable for PositionBlock<B> {
-    fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
-        let mut result = Self::default();
-        for i in 0..B {
-            result.data[i] = TreeIndex::conditional_select(&a.data[i], &b.data[i], choice);
-        }
-        result
-    }
-}
-
-impl<const B: BlockSize> Distribution<PositionBlock<B>> for Standard {
-    fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> PositionBlock<B> {
-        let mut result: PositionBlock<B> = PositionBlock::default();
-        for i in 0..B {
-            result.data[i] = rng.gen();
-        }
-        result
-    }
-}
-
-impl<const B: BlockSize> OramBlock for PositionBlock<B> {}
-
 #[derive(Clone, Copy, PartialEq)]
-/// A Path ORAM bucket.
-pub struct Bucket<V: OramBlock, const Z: BucketSize> {
-    /// The Path ORAM blocks stored by this bucket.
-    pub(crate) blocks: [PathOramBlock<V>; Z],
+/// A Path OSAM bucket.
+pub struct Bucket<V: OsamBlock, const Z: BucketSize> {
+    /// The Path OSAM blocks stored by this bucket.
+    pub(crate) blocks: [PathOsamBlock<V>; Z],
 }
 
-impl<V: OramBlock, const Z: BucketSize> std::fmt::Debug for Bucket<V, Z> {
+impl<V: OsamBlock, const Z: BucketSize> std::fmt::Debug for Bucket<V, Z> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut self_is_dummy = true;
 
@@ -183,23 +147,23 @@ impl<V: OramBlock, const Z: BucketSize> std::fmt::Debug for Bucket<V, Z> {
     }
 }
 
-impl<V: OramBlock, const Z: BucketSize> Default for Bucket<V, Z> {
+impl<V: OsamBlock, const Z: BucketSize> Default for Bucket<V, Z> {
     fn default() -> Self {
         Self {
-            blocks: [PathOramBlock::<V>::dummy(); Z],
+            blocks: [PathOsamBlock::<V>::dummy(); Z],
         }
     }
 }
 
-impl<V: OramBlock, const Z: BucketSize> ConditionallySelectable for Bucket<V, Z> {
+impl<V: OsamBlock, const Z: BucketSize> ConditionallySelectable for Bucket<V, Z> {
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
         let mut result = Self::default();
         for i in 0..result.blocks.len() {
             result.blocks[i] =
-                PathOramBlock::<V>::conditional_select(&a.blocks[i], &b.blocks[i], choice)
+                PathOsamBlock::<V>::conditional_select(&a.blocks[i], &b.blocks[i], choice)
         }
         result
     }
 }
 
-impl<V: OramBlock, const Z: BucketSize> OramBlock for Bucket<V, Z> {}
+impl<V: OsamBlock, const Z: BucketSize> OsamBlock for Bucket<V, Z> {}

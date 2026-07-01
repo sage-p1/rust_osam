@@ -5,12 +5,12 @@
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 // of this source tree. You may select, at your option, one of the above-listed licenses.
 
-//! A trait representing a Path ORAM stash.
+//! A trait representing a Path OSAM stash.
 
 use crate::{
-    bucket::{Bucket, PathOramBlock},
+    bucket::{Bucket, PathOsamBlock},
     utils::{bitonic_sort_by_keys, CompleteBinaryTreeIndex, TreeIndex},
-    Address, BucketSize, OramBlock, OramError, StashSize,
+    Identifier, BucketSize, OsamBlock, OsamError, StashSize,
 };
 
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq};
@@ -18,24 +18,24 @@ use subtle::{Choice, ConditionallySelectable, ConstantTimeEq};
 const STASH_GROWTH_INCREMENT: usize = 10;
 
 #[derive(Debug)]
-/// A fixed-size, obliviously accessed Path ORAM stash data structure implemented using oblivious sorting.
-pub struct ObliviousStash<V: OramBlock> {
-    blocks: Vec<PathOramBlock<V>>,
+/// A fixed-size, obliviously accessed Path OSAM stash data structure implemented using oblivious sorting.
+pub struct ObliviousStash<V: OsamBlock> {
+    blocks: Vec<PathOsamBlock<V>>,
     path_size: StashSize,
 }
 
-impl<V: OramBlock> ObliviousStash<V> {
+impl<V: OsamBlock> ObliviousStash<V> {
     fn len(&self) -> usize {
         self.blocks.len()
     }
 }
 
-impl<V: OramBlock> ObliviousStash<V> {
-    pub fn new(path_size: StashSize, overflow_size: StashSize) -> Result<Self, OramError> {
+impl<V: OsamBlock> ObliviousStash<V> {
+    pub fn new(path_size: StashSize, overflow_size: StashSize) -> Result<Self, OsamError> {
         let num_stash_blocks: usize = (path_size + overflow_size).try_into()?;
 
         Ok(Self {
-            blocks: vec![PathOramBlock::<V>::dummy(); num_stash_blocks],
+            blocks: vec![PathOsamBlock::<V>::dummy(); num_stash_blocks],
             path_size,
         })
     }
@@ -44,10 +44,27 @@ impl<V: OramBlock> ObliviousStash<V> {
         &mut self,
         physical_memory: &mut [Bucket<V, Z>],
         position: TreeIndex,
-    ) -> Result<(), OramError> {
+    ) -> Result<(), OsamError> {
         let height = position.ct_depth();
         let mut level_assignments = vec![TreeIndex::MAX; self.len()];
-        let mut level_counts = vec![0; usize::try_from(height)? + 1];
+        let mut level_real_blocks_to_add_counts = vec![0; usize::try_from(height)? + 1]; // Ensures each bucket has exactly Z blocks
+        let mut level_existing_block_counts = vec![0; usize::try_from(height)? + 1]; // Tracks block count of each bucket in the path to write
+
+        // Scan over physical memory to determine capacities, as buckets may already contain real blocks 
+        for depth in 0..=height {
+            let bucket =
+                &physical_memory[usize::try_from(position.ct_node_on_path(depth, height))?];
+            let mut count = 0;
+            for slot_number in 0..Z {
+                let block_is_dummy = bucket.blocks[slot_number].ct_is_dummy();
+                let count_incremented = count + 1;
+                count.conditional_assign(&count_incremented, !block_is_dummy);
+            }
+            level_existing_block_counts[usize::try_from(depth)?] = count;
+        }
+
+        // The first bucket is always read from and should never have any preexisting blocks
+        assert_eq!(level_existing_block_counts[0], 0);
 
         // Assign all non-dummy blocks in the stash to either the path or the overflow.
         for (i, block) in self.blocks.iter().enumerate() {
@@ -63,8 +80,8 @@ impl<V: OramBlock> ObliviousStash<V> {
             let mut assigned = Choice::from(0);
             // Obliviously scan through the buckets from leaf to root,
             // assigning the block to the first empty bucket satisfying the invariant.
-            for (level, count) in level_counts.iter_mut().enumerate().rev() {
-                let level_bucket_full: Choice = count.ct_eq(&(u64::try_from(Z)?));
+            for (level, count) in level_real_blocks_to_add_counts.iter_mut().enumerate().rev() {
+                let level_bucket_full: Choice = count.ct_eq(&(u64::try_from(Z)? - level_existing_block_counts[level]));
 
                 let level_u64 = u64::try_from(level)?;
                 let level_satisfies_invariant = block_position
@@ -93,7 +110,7 @@ impl<V: OramBlock> ObliviousStash<V> {
         // If the stash overflows, this loop will execute twice and the inner `if` will execute.
         // This difference in control flow will leak the fact that the stash has overflowed.
         // This is a violation of obliviousness, but the alternative is simply to fail.
-        // If the stash is set large enough when the ORAM is initialized,
+        // If the stash is set large enough when the OSAM is initialized,
         // stash overflow will occur only with negligible probability.
         while exists_unfilled_levels.into() {
             // Make a pass over the stash, assigning dummy blocks to unfilled levels in the path.
@@ -107,11 +124,10 @@ impl<V: OramBlock> ObliviousStash<V> {
                 if i == self.blocks.len() - 1 {
                     break;
                 }
-
                 let block_free = block.ct_is_dummy();
 
                 let mut assigned: Choice = 0.into();
-                for (level, count) in level_counts.iter_mut().enumerate() {
+                for (level, count) in level_real_blocks_to_add_counts.iter_mut().enumerate() {
                     let full = count.ct_eq(&(u64::try_from(Z)?));
                     let no_op = assigned | full | !block_free;
 
@@ -123,7 +139,7 @@ impl<V: OramBlock> ObliviousStash<V> {
 
             // Check that all levels have been filled.
             exists_unfilled_levels = 0.into();
-            for count in level_counts.iter() {
+            for count in level_real_blocks_to_add_counts.iter() {
                 let full = count.ct_eq(&(u64::try_from(Z)?));
                 exists_unfilled_levels |= !full;
             }
@@ -137,7 +153,7 @@ impl<V: OramBlock> ObliviousStash<V> {
 
                 self.blocks.resize(
                     self.blocks.len() + STASH_GROWTH_INCREMENT,
-                    PathOramBlock::<V>::dummy(),
+                    PathOsamBlock::<V>::dummy(),
                 );
                 level_assignments.resize(
                     level_assignments.len() + STASH_GROWTH_INCREMENT,
@@ -151,7 +167,12 @@ impl<V: OramBlock> ObliviousStash<V> {
             }
         }
 
+        // Sort stash so the first `path_size` blocks align with their assigned buckets
         bitonic_sort_by_keys(&mut self.blocks, &mut level_assignments);
+
+        for (level, count) in level_existing_block_counts.iter_mut().enumerate() {
+            self.sort_bucket_indices::<Z>(level, count);
+        }
 
         // Write the first Z * height blocks into slots in the tree
         for depth in 0..=height {
@@ -160,57 +181,112 @@ impl<V: OramBlock> ObliviousStash<V> {
             for slot_number in 0..Z {
                 let stash_index = (usize::try_from(depth)?) * Z + slot_number;
 
-                bucket_to_write.blocks[slot_number] = self.blocks[stash_index];
+                // Either write real block from stash to bucket, or preserve preexisting real block 
+                let mut block = bucket_to_write.blocks[slot_number];
+                let block_is_dummy = self.blocks[stash_index].ct_is_dummy();
+                block.conditional_assign(&self.blocks[stash_index], !block_is_dummy);
+                bucket_to_write.blocks[slot_number] = block;
+                self.blocks[stash_index] = PathOsamBlock::<V>::dummy();
             }
         }
 
         Ok(())
     }
 
-    pub fn access<F: Fn(&V) -> V>(
+    pub fn read_from_path<const Z: crate::BucketSize>(
         &mut self,
-        address: Address,
+        physical_memory: &mut [Bucket<V, Z>],
+        position: TreeIndex,
+    ) -> Result<(), OsamError> {
+        let height = position.ct_depth();
+
+        // Download physical memory to stash and replace with dummy blocks
+        for i in (0..(self.path_size / u64::try_from(Z)?)).rev() {
+            let bucket_index = usize::try_from(position.ct_node_on_path(i, height))?;
+            let mut bucket = physical_memory[bucket_index];
+            for slot_index in 0..Z {
+                self.blocks[Z * (usize::try_from(i)?) + slot_index] = bucket.blocks[slot_index];
+                bucket.blocks[slot_index] = PathOsamBlock::<V>::dummy();
+            }
+            physical_memory[bucket_index] = bucket;
+        }
+
+        Ok(())
+    }
+
+    pub fn write_to_stash(
+        &mut self,
+        new_identifier: Identifier,
         new_position: TreeIndex,
-        value_callback: F,
-    ) -> Result<V, OramError> {
+        new_value: V,
+    ) -> Result<(), OsamError> {
+        // Create block with new values
+        let new_block = PathOsamBlock {
+            value: new_value,
+            identifier: new_identifier,
+            position: new_position,
+        };
+
+        // Overwrite the first dummy 
+        let mut assigned = Choice::from(0);
+        let read_from_path_indices: usize = usize::try_from(self.path_size)?;
+        // Skip the first `path_size` indices in the stash, since these are 
+        // overwritten upon calling read_from_path
+        for block in self
+            .blocks
+            .iter_mut()
+            .skip(read_from_path_indices) 
+        {
+            let block_is_dummy = block.ct_is_dummy();
+            let should_assign = block_is_dummy & (!assigned);
+            assigned |= should_assign;
+            block.conditional_assign(&new_block, should_assign);
+        }
+
+        // Add block to stash and resize if there no room currently (stash overflow)
+        if (!assigned).into() {
+            self.blocks.push(new_block);
+
+            self.blocks.resize(
+                self.blocks.len() + STASH_GROWTH_INCREMENT,
+                PathOsamBlock::<V>::dummy(),
+            );
+
+            log::warn!(
+                "Stash overflow occurred. Stash resized to {} blocks.",
+                self.blocks.len()
+            );
+        }       
+
+        Ok(())
+    }
+
+    pub fn read_from_stash(
+        &mut self,
+        identifier: Identifier,
+    ) -> Result<Option<V>, OsamError> {
         let mut result: V = V::default();
         let mut found: Choice = 0.into();
 
-        // Iterate over stash, updating the block with address `address` if one exists.
+        // Iterate over stash, updating the block with identifier `identifier` if one exists.
         for block in &mut self.blocks {
-            let is_requested_index = block.address.ct_eq(&address);
+            let is_requested_index = block.identifier.ct_eq(&identifier);
             found.conditional_assign(&1.into(), is_requested_index);
 
             // Read current value of target block into `result`.
             result.conditional_assign(&block.value, is_requested_index);
             // Write new position into target block.
             block
-                .position
-                .conditional_assign(&new_position, is_requested_index);
-            // If a write, write new value into target block.
-            let value_to_write = value_callback(&result);
-            block
-                .value
-                .conditional_assign(&value_to_write, is_requested_index);
+                .conditional_assign(&PathOsamBlock::<V>::dummy(), is_requested_index);
         }
 
-        // If a block with address `address` is not found,
-        // initialize one by writing to the last block in the stash,
-        // which will always be a dummy block.
-        let last_block_index = self.blocks.len() - 1;
-        let last_block = &mut self.blocks[last_block_index];
-        assert!(bool::from(last_block.ct_is_dummy()));
-        last_block.conditional_assign(
-            &PathOramBlock {
-                value: value_callback(&result),
-                address,
-                position: new_position,
-            },
-            !found,
-        );
+        let mut output: Option<V> = None;
+        if found.into() {
+            output = Some(result);
+        }
 
         // Return the value of the found block (or the default value, if no block was found)
-        Ok(result)
+        Ok(output)
     }
 
     #[cfg(test)]
@@ -224,21 +300,43 @@ impl<V: OramBlock> ObliviousStash<V> {
         result
     }
 
-    pub fn read_from_path<const Z: crate::BucketSize>(
-        &mut self,
-        physical_memory: &mut [Bucket<V, Z>],
-        position: TreeIndex,
-    ) -> Result<(), OramError> {
-        let height = position.ct_depth();
+    fn sort_bucket_indices<const Z: BucketSize>(
+        &mut self, 
+        level: usize,
+        occupied_spaces: &mut u64,
+    ) {
+        let mut temp_bucket = vec![PathOsamBlock::<V>::dummy(); Z];
+        let mut identifiers = vec![TreeIndex::MAX; Z];
+        
+        // Create a vector copy of the current bucket and a vector of block identifiers.
+        // To ensure preexisting blocks in the write path are not overwritten, we fill
+        // buckets with real blocks in ascending order / left-to-right by modifying the
+        // identifiers of `occupied_spaces` dummy blocks to be 0, a reserved identifier not
+        // given by alloc. When we sort by identifier, per bucket, the first `occupied_spaces`
+        // in the stash are dummy blocks and do not overlap with preexisting real blocks in 
+        // physical memory. After, any remaining blocks in that bucket are dummy and can be  
+        // safely overwritten. 
+        for i in 0..Z { 
+            let block = self.blocks[level * Z + i];
+            self.blocks[level * Z + i] = PathOsamBlock::<V>::dummy();
+            temp_bucket[i] = block;
+            let mut identifier = block.identifier;
 
-        for i in (0..(self.path_size / u64::try_from(Z)?)).rev() {
-            let bucket_index = position.ct_node_on_path(i, height);
-            let bucket = physical_memory[usize::try_from(bucket_index)?];
-            for slot_index in 0..Z {
-                self.blocks[Z * (usize::try_from(i)?) + slot_index] = bucket.blocks[slot_index];
-            }
+            let block_is_dummy = block.ct_is_dummy();
+            let block_exists = occupied_spaces.ct_ne(&0);
+            let count_decremented = (*occupied_spaces).checked_sub(1).unwrap_or_else(|| 0);
+            let should_assign = block_is_dummy & block_exists;
+            occupied_spaces.conditional_assign(&count_decremented, should_assign);
+            identifier.conditional_assign(&0, should_assign);
+            identifiers[i] = identifier;
         }
 
-        Ok(())
+        // Sort by identifier so that per bucket, the real blocks in the stash
+        // begin where the dummy blocks begin in physical memory (no overlapping)
+        bitonic_sort_by_keys(&mut temp_bucket, &mut identifiers);
+
+        for i in 0..Z { 
+            self.blocks[level * Z + i] = temp_bucket[i];
+        }
     }
 }

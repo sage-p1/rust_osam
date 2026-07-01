@@ -6,24 +6,26 @@
 // of this source tree. You may select, at your option, one of the above-listed licenses.
 
 //! This module contains common test utilities for crates generating tests utilizing the
-//! `oram` crate.
+//! `osam` crate.
 
 use std::fmt::Debug;
 use std::sync::Once;
+use std::ops::Div;
+use std::collections::HashMap;
 static INIT: Once = Once::new();
-use crate::path_oram::PathOram;
+use crate::path_osam::PathOsam;
 use crate::{
-    Address, BlockSize, BucketSize, Oram, OramBlock, OramError, RecursionCutoff, StashSize,
+    BucketSize, Identifier, Osam, OsamBlock, OsamError, StashSize, TreeIndex
 };
 use rand::{
     distributions::{Distribution, Standard},
     rngs::StdRng,
-    Rng, SeedableRng,
+    CryptoRng, Rng, SeedableRng,
 };
 use simplelog::{Config, WriteLogger};
 
 // For use in manual testing and inspection.
-// Change log_level to "Warn" to see stash overflow events, and to "Debug" to additionally see ORAM initialization events.
+// Change log_level to "Warn" to see stash overflow events, and to "Debug" to additionally see OSAM initialization events.
 pub(crate) fn init_logger() {
     INIT.call_once(|| {
         WriteLogger::init(
@@ -35,236 +37,237 @@ pub(crate) fn init_logger() {
     })
 }
 
-/// Tests the correctness of an `ORAM` implementation T on a workload of random reads and writes.
-pub(crate) fn random_workload<T: Oram>(oram: &mut T, num_operations: usize)
+/// Tests the correctness of an `OSAM` implementation T on a sequence of all writes then reads
+pub(crate) fn write_then_read<T: Osam>(osam: &mut T, bucket_size: usize, operation_factor: usize, stash_size_experiment: bool)
 where
     Standard: Distribution<T::V>,
 {
     init_logger();
     let mut rng = StdRng::seed_from_u64(0);
 
-    let capacity = oram.block_capacity().unwrap();
-    let mut mirror_array = vec![T::V::default(); usize::try_from(capacity).unwrap()];
+    // let num_operations = (capacity * bucket_size).div(2);
+    let capacity = osam.block_capacity();
+    let num_operations: usize;
+    if stash_size_experiment {
+        num_operations = (capacity * bucket_size).div(2);
+    } else {
+        num_operations = capacity * bucket_size * operation_factor;
+    }
+    
+    let mut mirror_hash_map = HashMap::new();
 
+    // Generate a sequence of allocs and write a random value
     for _ in 0..num_operations {
-        let random_index = rng.gen_range(0..capacity);
+        let address = osam.alloc(&mut rng).unwrap();
+        let identifier = address.0;
+        let position = address.1;
         let random_block_value = rng.gen::<T::V>();
-
-        let read_versus_write = rng.gen::<bool>();
-
-        if read_versus_write {
-            assert_eq!(
-                oram.read(random_index, &mut rng).unwrap(),
-                mirror_array[usize::try_from(random_index).unwrap()]
-            );
-        } else {
-            oram.write(random_index, random_block_value, &mut rng)
-                .unwrap();
-            mirror_array[usize::try_from(random_index).unwrap()] = random_block_value;
-        }
+        let _ = osam.write(identifier, position, random_block_value, &mut rng);
+        mirror_hash_map.insert(address, random_block_value);
     }
 
-    for index in 0..capacity {
+    // Assert reads fetch the proper data block
+    for (address, &random_block_value) in mirror_hash_map.iter() {
+        let identifier = address.0;
+        let position = address.1;
         assert_eq!(
-            oram.read(index, &mut rng).unwrap(),
-            mirror_array[usize::try_from(index).unwrap()],
-            "{index}"
+            osam.read(identifier, position).unwrap().unwrap(),
+            random_block_value
         )
     }
 }
 
-/// Tests the correctness of an `Oram` type T on repeated passes of sequential accesses 0, 1, ..., `capacity`
-pub(crate) fn linear_workload<T: Oram + Debug>(oram: &mut T, num_operations: u64)
+/// Tests the correctness of an `OSAM` implementation T on a sequence of all reads then writes
+pub(crate) fn read_then_write<T: Osam>(osam: &mut T, bucket_size: usize, operation_factor: usize, stash_size_experiment: bool)
 where
     Standard: Distribution<T::V>,
 {
     init_logger();
     let mut rng = StdRng::seed_from_u64(0);
 
-    let capacity = oram.block_capacity().unwrap();
-    let mut mirror_array = vec![T::V::default(); usize::try_from(capacity).unwrap()];
-
-    let num_passes = num_operations / capacity;
-
-    for _ in 0..num_passes {
-        for index in 0..capacity {
-            let random_block_value = rng.gen::<T::V>();
-
-            let read_versus_write: bool = rng.gen::<bool>();
-
-            if read_versus_write {
-                assert_eq!(
-                    oram.read(index, &mut rng).unwrap(),
-                    mirror_array[usize::try_from(index).unwrap()]
-                );
-            } else {
-                oram.write(index, random_block_value, &mut rng).unwrap();
-                mirror_array[usize::try_from(index).unwrap()] = random_block_value;
-            }
-        }
+    let capacity = osam.block_capacity();
+    let num_operations: usize;
+    if stash_size_experiment {
+        num_operations = (capacity * bucket_size).div(2);
+    } else {
+        num_operations = capacity * bucket_size * operation_factor;
     }
 
-    for index in 0..capacity {
+    // Generate a sequence of allocs and write a random value
+    for _ in 0..num_operations {
+        let address = osam.alloc(&mut rng).unwrap();
+        let identifier = address.0;
+        let position = address.1;
         assert_eq!(
-            oram.read(index, &mut rng).unwrap(),
-            mirror_array[usize::try_from(index).unwrap()],
-            "{index}"
-        )
+            osam.read(identifier, position).unwrap(),
+            None
+        );
+        let _ = osam.write(identifier, position, T::V::default(), &mut rng);
     }
 }
 
-macro_rules! create_path_oram_correctness_tests_all_parameters {
-    ($oram_type: ident, $prefix: literal, $block_capacity: expr, $block_size: expr, $bucket_size: expr, $position_block_size: expr, $overflow_size: expr, $recursion_cutoff: expr, $iterations_to_test: expr) => {
+macro_rules! create_path_osam_correctness_tests_all_parameters {
+    ($osam_type: ident, $prefix: literal, $block_capacity: expr, $block_size: expr, $bucket_size: expr, $overflow_size: expr, $operation_factor: expr, $stash_size_experiment: expr) => {
         paste::paste! {
             #[test]
-            fn [<"linear_workload" $prefix $block_capacity _ $block_size _ $bucket_size _ $position_block_size _ $overflow_size _ $recursion_cutoff>]() {
-                let mut rng = StdRng::seed_from_u64(1);
-                let mut oram = $oram_type::<BlockValue<$block_size>, $bucket_size, $position_block_size>::new_with_parameters($block_capacity, &mut rng, $overflow_size, $recursion_cutoff).unwrap();
-                linear_workload(&mut oram, $iterations_to_test);
+            fn [<"write_then_read" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor _ $stash_size_experiment>]() {
+                let mut osam = $osam_type::<BlockValue<$block_size>, $bucket_size>::new_with_parameters($block_capacity, $overflow_size).unwrap();
+                write_then_read(&mut osam, $bucket_size, $operation_factor, $stash_size_experiment);
             }
 
             #[test]
-            fn [<"random_workload" $prefix $block_capacity _ $block_size _ $bucket_size _ $position_block_size _ $overflow_size _ $recursion_cutoff>]() {
-                let mut rng = StdRng::seed_from_u64(1);
-                let mut oram = $oram_type::<BlockValue<$block_size>, $bucket_size, $position_block_size>::new_with_parameters($block_capacity, &mut rng, $overflow_size, $recursion_cutoff).unwrap();
-                random_workload(&mut oram, $iterations_to_test);
+            fn [<"read_then_write" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor _ $stash_size_experiment>]() {
+                let mut osam = $osam_type::<BlockValue<$block_size>, $bucket_size>::new_with_parameters($block_capacity, $overflow_size).unwrap();
+                read_then_write(&mut osam, $bucket_size, $operation_factor, $stash_size_experiment);
             }
         }
     };
 }
 
-macro_rules! create_path_oram_correctness_tests_helper {
-    ($oram_type: ident, $prefix: literal, $bucket_size: expr, $position_block_size: expr, $recursion_cutoff: expr, $overflow_size: expr) => {
-        create_path_oram_correctness_tests_all_parameters!(
-            $oram_type,
+macro_rules! create_path_osam_correctness_tests_helper {
+    ($osam_type: ident, $prefix: literal, $bucket_size: expr, $overflow_size: expr, $stash_size_experiment: expr) => {
+        create_path_osam_correctness_tests_all_parameters!(
+            $osam_type,
             $prefix,
             8,
             1,
             $bucket_size,
-            $position_block_size,
             $overflow_size,
-            $recursion_cutoff,
-            100
+            1,
+            $stash_size_experiment
         );
-        create_path_oram_correctness_tests_all_parameters!(
-            $oram_type,
+        create_path_osam_correctness_tests_all_parameters!(
+            $osam_type,
             $prefix,
             4,
             1,
             $bucket_size,
-            $position_block_size,
             $overflow_size,
-            $recursion_cutoff,
-            100
+            1,
+            $stash_size_experiment
         );
         // Block size 4 blocks, block size 2 bytes, testing with 100 operations
-        create_path_oram_correctness_tests_all_parameters!(
-            $oram_type,
+        create_path_osam_correctness_tests_all_parameters!(
+            $osam_type,
             $prefix,
             4,
             2,
             $bucket_size,
-            $position_block_size,
             $overflow_size,
-            $recursion_cutoff,
-            100
+            2,
+            $stash_size_experiment
         );
-        create_path_oram_correctness_tests_all_parameters!(
-            $oram_type,
+        create_path_osam_correctness_tests_all_parameters!(
+            $osam_type,
             $prefix,
             16,
             1,
             $bucket_size,
-            $position_block_size,
             $overflow_size,
-            $recursion_cutoff,
-            100
+            3,
+            $stash_size_experiment
         );
-        create_path_oram_correctness_tests_all_parameters!(
-            $oram_type,
+        create_path_osam_correctness_tests_all_parameters!(
+            $osam_type,
             $prefix,
             2,
             1,
             $bucket_size,
-            $position_block_size,
             $overflow_size,
-            $recursion_cutoff,
-            1000
+            1,
+            $stash_size_experiment
         );
     };
 }
 
-macro_rules! create_path_oram_correctness_tests {
-    ($bucket_size: expr, $position_block_size: expr, $recursion_cutoff: expr, $overflow_size: expr) => {
-        create_path_oram_correctness_tests_helper!(
-            PathOram,
+macro_rules! create_path_osam_correctness_tests {
+    ($bucket_size: expr, $overflow_size: expr) => {
+        create_path_osam_correctness_tests_helper!(
+            PathOsam,
             "",
             $bucket_size,
-            $position_block_size,
-            $recursion_cutoff,
-            $overflow_size
+            $overflow_size,
+            false
         );
     };
 }
 
-macro_rules! create_path_oram_stash_size_tests {
-    ($bucket_size: expr, $position_block_size: expr, $recursion_cutoff: expr, $overflow_size: expr) => {
-        create_path_oram_correctness_tests_helper!(
+macro_rules! create_path_osam_stash_size_tests {
+    ($bucket_size: expr, $overflow_size: expr) => {
+        create_path_osam_correctness_tests_helper!(
             StashSizeMonitor,
             "_stash_size_",
             $bucket_size,
-            $position_block_size,
-            $recursion_cutoff,
-            $overflow_size
+            $overflow_size,
+            true
         );
     };
 }
 
 #[derive(Debug)]
-pub(crate) struct StashSizeMonitor<V: OramBlock, const Z: BucketSize, const AB: BlockSize> {
-    oram: PathOram<V, Z, AB>,
+pub(crate) struct StashSizeMonitor<V: OsamBlock, const Z: BucketSize> {
+    osam: PathOsam<V, Z>,
 }
 
-impl<V: OramBlock, const Z: BucketSize, const AB: BlockSize> StashSizeMonitor<V, Z, AB> {
-    pub(crate) fn new_with_parameters<R: rand::RngCore + rand::CryptoRng>(
-        block_capacity: Address,
-        rng: &mut R,
+impl<V: OsamBlock, const Z: BucketSize> StashSizeMonitor<V, Z> {
+    pub(crate) fn new_with_parameters(
+        block_capacity: Identifier,
         overflow_size: StashSize,
-        recursion_cutoff: RecursionCutoff,
-    ) -> Result<Self, OramError> {
+    ) -> Result<Self, OsamError> {
         Ok(Self {
-            oram: PathOram::new_with_parameters(
+            osam: PathOsam::new_with_parameters(
                 block_capacity,
-                rng,
                 overflow_size,
-                recursion_cutoff,
             )
             .unwrap(),
         })
     }
 }
 
-impl<V: OramBlock, const Z: BucketSize, const AB: BlockSize> Oram for StashSizeMonitor<V, Z, AB> {
+impl<V: OsamBlock, const Z: BucketSize> Osam for StashSizeMonitor<V, Z> {
     type V = V;
 
-    fn block_capacity(&self) -> Result<Address, OramError> {
-        self.oram.block_capacity()
+    fn block_capacity(&self) -> usize {
+        self.osam.block_capacity()
     }
 
-    fn access<R: rand::RngCore + rand::CryptoRng, F: Fn(&V) -> V>(
+    fn alloc<R: Rng + CryptoRng>(
         &mut self,
-        index: Address,
-        callback: F,
         rng: &mut R,
-    ) -> Result<V, OramError> {
-        let result = self.oram.access(index, callback, rng);
-        let stash_size = self.oram.stash_occupancy();
+    ) -> Result<(Identifier, TreeIndex), OsamError> {
+        self.osam.alloc(rng)
+    }
+
+    fn write<R: Rng + CryptoRng>(
+        &mut self,
+        new_identifier: Identifier,
+        new_position: TreeIndex,
+        new_value: Self::V,
+        rng: &mut R,
+    ) -> Result<(), OsamError> {
+        let result = self.osam.write(new_identifier, new_position, new_value, rng);
+        let stash_size = self.osam.stash_occupancy();
         assert!(stash_size < 10);
         result
     }
+
+    fn read(
+        &mut self,
+        identifier: Identifier,
+        position: TreeIndex,
+    ) -> Result<Option<Self::V>, OsamError> {
+        let result = self.osam.read(identifier, position);
+        let stash_size = self.osam.stash_occupancy();
+        assert!(stash_size < 10);
+        result
+    }
+
+    fn evict_position(&mut self) -> Result<TreeIndex, OsamError> {
+        self.osam.evict_position()
+    }
 }
 
-pub(crate) use create_path_oram_correctness_tests;
-pub(crate) use create_path_oram_correctness_tests_all_parameters;
-pub(crate) use create_path_oram_correctness_tests_helper;
-pub(crate) use create_path_oram_stash_size_tests;
+pub(crate) use create_path_osam_correctness_tests;
+pub(crate) use create_path_osam_correctness_tests_all_parameters;
+pub(crate) use create_path_osam_correctness_tests_helper;
+pub(crate) use create_path_osam_stash_size_tests;
