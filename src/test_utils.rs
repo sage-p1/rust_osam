@@ -38,7 +38,7 @@ pub(crate) fn init_logger() {
 }
 
 /// Tests the correctness of an `OSAM` implementation T on a sequence of all writes then reads
-pub(crate) fn write_then_read<T: Osam>(osam: &mut T, bucket_size: usize, operation_factor: usize, stash_size_experiment: bool)
+pub(crate) fn write_and_evict_then_read<T: Osam>(osam: &mut T, bucket_size: usize, operation_factor: usize, stash_size_experiment: bool)
 where
     Standard: Distribution<T::V>,
 {
@@ -62,7 +62,7 @@ where
         let identifier = address.0;
         let position = address.1;
         let random_block_value = rng.gen::<T::V>();
-        let _ = osam.write(identifier, position, random_block_value, &mut rng);
+        let _ = osam.write_and_evict(identifier, position, random_block_value, &mut rng);
         mirror_hash_map.insert(address, random_block_value);
     }
 
@@ -78,7 +78,7 @@ where
 }
 
 /// Tests the correctness of an `OSAM` implementation T on a sequence of all reads then writes
-pub(crate) fn read_then_write<T: Osam>(osam: &mut T, bucket_size: usize, operation_factor: usize, stash_size_experiment: bool)
+pub(crate) fn read_then_write_and_evict<T: Osam>(osam: &mut T, bucket_size: usize, operation_factor: usize, stash_size_experiment: bool)
 where
     Standard: Distribution<T::V>,
 {
@@ -102,7 +102,7 @@ where
             osam.read(identifier, position).unwrap(),
             None
         );
-        let _ = osam.write(identifier, position, T::V::default(), &mut rng);
+        let _ = osam.write_and_evict(identifier, position, T::V::default(), &mut rng);
     }
 }
 
@@ -110,15 +110,15 @@ macro_rules! create_path_osam_correctness_tests_all_parameters {
     ($osam_type: ident, $prefix: literal, $block_capacity: expr, $block_size: expr, $bucket_size: expr, $overflow_size: expr, $operation_factor: expr, $stash_size_experiment: expr) => {
         paste::paste! {
             #[test]
-            fn [<"write_then_read" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor _ $stash_size_experiment>]() {
+            fn [<"write_and_evict_then_read" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor _ $stash_size_experiment>]() {
                 let mut osam = $osam_type::<BlockValue<$block_size>, $bucket_size>::new_with_parameters($block_capacity, $overflow_size).unwrap();
-                write_then_read(&mut osam, $bucket_size, $operation_factor, $stash_size_experiment);
+                write_and_evict_then_read(&mut osam, $bucket_size, $operation_factor, $stash_size_experiment);
             }
 
             #[test]
-            fn [<"read_then_write" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor _ $stash_size_experiment>]() {
+            fn [<"read_then_write_and_evict" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor _ $stash_size_experiment>]() {
                 let mut osam = $osam_type::<BlockValue<$block_size>, $bucket_size>::new_with_parameters($block_capacity, $overflow_size).unwrap();
-                read_then_write(&mut osam, $bucket_size, $operation_factor, $stash_size_experiment);
+                read_then_write_and_evict(&mut osam, $bucket_size, $operation_factor, $stash_size_experiment);
             }
         }
     };
@@ -238,14 +238,26 @@ impl<V: OsamBlock, const Z: BucketSize> Osam for StashSizeMonitor<V, Z> {
         self.osam.alloc(rng)
     }
 
-    fn write<R: Rng + CryptoRng>(
+    fn write_and_evict<R: Rng + CryptoRng>(
         &mut self,
         new_identifier: Identifier,
         new_position: TreeIndex,
         new_value: Self::V,
         rng: &mut R,
     ) -> Result<(), OsamError> {
-        let result = self.osam.write(new_identifier, new_position, new_value, rng);
+        let result = self.osam.write_and_evict(new_identifier, new_position, new_value, rng);
+        let stash_size = self.osam.stash_occupancy();
+        assert!(stash_size < 10);
+        result
+    }
+
+    fn write_no_evict(
+        &mut self,
+        new_identifier: Identifier,
+        new_position: TreeIndex,
+        new_value: Self::V,
+    ) -> Result<(), OsamError> {
+        let result = self.osam.write_no_evict(new_identifier, new_position, new_value);
         let stash_size = self.osam.stash_occupancy();
         assert!(stash_size < 10);
         result

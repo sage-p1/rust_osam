@@ -28,26 +28,42 @@
 //! The below example reads a database from memory into an OSAM, thus permitting secret-dependent accesses.
 //!
 //! ```
-//! use osam::{Identifier, BlockSize, BlockValue, Osam, DefaultOsam};
+//! use osam::{BlockSize, BlockValue, Identifier, Osam, PathOsam, TreeIndex};
+//! use osam::path_osam::{DEFAULT_BLOCKS_PER_BUCKET, DEFAULT_STASH_OVERFLOW_SIZE};
 //! # use osam::OsamError;
 //!
 //! const BLOCK_SIZE: BlockSize = 64;
 //! const DB_SIZE: Identifier = 64;
-//! # const DATABASE: [[u8; BLOCK_SIZE as usize]; DB_SIZE as usize] =
-//! # [[0; BLOCK_SIZE as usize]; DB_SIZE as usize];
+//! const DATABASE: [[u8; BLOCK_SIZE as usize]; DB_SIZE as usize] =
+//! [[0; BLOCK_SIZE as usize]; DB_SIZE as usize];
 //! let mut rng = rand::rngs::OsRng;
+//! let mut addresses: [(Identifier, TreeIndex); DB_SIZE as usize] =  
+//! [(Identifier::MAX, 0); DB_SIZE as usize];
 //!
 //! // Initialize an OSAM to store 64 blocks of 64 bytes each.
-//! let mut osam = DefaultOsam::<BlockValue<BLOCK_SIZE>>::new(DB_SIZE, &mut rng)?;
+//! let mut osam = PathOsam::<
+//!     BlockValue<BLOCK_SIZE>, 
+//!     DEFAULT_BLOCKS_PER_BUCKET,
+//!     >::new_with_parameters(DB_SIZE, DEFAULT_STASH_OVERFLOW_SIZE)?;
 //!
 //! // Read a database (here, an array of byte arrays) into the OSAM.
 //! for (i, bytes) in DATABASE.iter().enumerate() {
-//!     osam.write(i as Address, BlockValue::new(*bytes), &mut rng)?;
+//!     let address = osam.alloc(&mut rng)?;
+//!     addresses[i] = address;
+//!     let identifier = address.0;
+//!     let position = address.1;
+//!     let _ = osam.write_and_evict(identifier, position, BlockValue::new(*bytes), &mut rng)?;
 //! }
 //!
 //! // Now you can safely make secret-dependent accesses to your database.
-//! let secret = 42;
-//! let _ = osam.read(secret, &mut rng)?;
+//! for (i, address) in addresses.iter().enumerate() {
+//!     let address = addresses[i];
+//!     let identifier = address.0;
+//!     let position = address.1;
+//!     let bytes = osam.read(identifier, position)?.unwrap();
+//!     assert_eq!(bytes, BlockValue::new(DATABASE[i]));
+//! }
+//! 
 //! # Ok::<(), OsamError>(())
 //! ```
 //!
@@ -63,24 +79,21 @@
 //! interface which exposes these parameters.
 //!
 //! ```
-//! use osam::{Address, BlockSize, BlockValue, BucketSize,
-//!             Osam, PathOsam, StashSize};
-//! use osam::path_osam::{DEFAULT_BLOCKS_PER_BUCKET, DEFAULT_RECURSION_CUTOFF,
-//!             DEFAULT_POSITIONS_PER_BLOCK, DEFAULT_STASH_OVERFLOW_SIZE};
+//! use osam::{BlockSize, BlockValue, BucketSize,
+//!             Identifier, Osam, PathOsam, StashSize};
+//! use osam::path_osam::{DEFAULT_BLOCKS_PER_BUCKET, DEFAULT_STASH_OVERFLOW_SIZE};
 //! # use osam::OsamError;
 //! # let mut rng = rand::rngs::OsRng;
 //! # const BLOCK_SIZE: BlockSize = 64;
-//! # const DB_SIZE: Address = 64;
+//! # const DB_SIZE: Identifier = 64;
 //!
 //! const BUCKET_SIZE: BucketSize = DEFAULT_BLOCKS_PER_BUCKET;
-//! const POSITIONS_PER_BLOCK: BlockSize = DEFAULT_POSITIONS_PER_BLOCK;
 //! const INITIAL_STASH_OVERFLOW_SIZE: StashSize = DEFAULT_STASH_OVERFLOW_SIZE;
 //!
 //! let mut osam = PathOsam::<
-//!     BlockValue<BLOCK_SIZE>,
-//!     BUCKET_SIZE,
-//!     POSITIONS_PER_BLOCK,
-//!     >::new_with_parameters(DB_SIZE, &mut rng, INITIAL_STASH_OVERFLOW_SIZE, RECURSION_CUTOFF)?;
+//!     BlockValue<BLOCK_SIZE>, 
+//!     DEFAULT_BLOCKS_PER_BUCKET,
+//!     >::new_with_parameters(DB_SIZE, DEFAULT_STASH_OVERFLOW_SIZE)?;
 //! # Ok::<(), OsamError>(())
 //! ```
 //!
@@ -93,7 +106,7 @@ use std::num::TryFromIntError;
 use rand::{CryptoRng, RngCore};
 use subtle::ConditionallySelectable;
 use thiserror::Error;
-use utils::TreeIndex;
+// use utils::TreeIndex;
 
 pub(crate) mod bucket;
 pub mod path_osam;
@@ -104,6 +117,7 @@ pub(crate) mod utils;
 
 pub use crate::bucket::BlockValue;
 pub use crate::path_osam::PathOsam;
+pub use crate::utils::TreeIndex;
 
 /// The numeric type used to specify the size of an OSAM block in bytes.
 pub type BlockSize = usize;
@@ -157,19 +171,27 @@ where
     /// Returns the capacity in blocks of this OSAM.
     fn block_capacity(&self) -> usize;
 
-    /// Allocates a valid Identifier and TreeIndex
+    /// Allocates a valid Identifier and TreeIndex to be used for reading and writing
     fn alloc<R: RngCore + CryptoRng>(
         &mut self,
         rng: &mut R,
     ) -> Result<(Identifier, TreeIndex), OsamError>;
 
-    /// Obliviously writes the value stored at `index`. Returns the value previously stored at `index`.
-    fn write<R: RngCore + CryptoRng>(
+    /// Obliviously writes the value stored `identifier` and `position`. Evicts blocks to server.
+    fn write_and_evict<R: RngCore + CryptoRng>(
         &mut self,
-        identifier: Identifier,
-        position: TreeIndex,
+        new_identifier: Identifier,
+        new_position: TreeIndex,
         new_value: Self::V,
         rng: &mut R,
+    ) -> Result<(), OsamError>;
+
+    /// Locally writes the value stored `identifier` and `position` to stash. Does not evict to server.
+    fn write_no_evict(
+        &mut self,
+        new_identifier: Identifier,
+        new_position: TreeIndex,
+        new_value: Self::V,
     ) -> Result<(), OsamError>;
 
     /// Obliviously reads the value stored at `index`.

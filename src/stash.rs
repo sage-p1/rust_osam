@@ -10,7 +10,7 @@
 use crate::{
     bucket::{Bucket, PathOsamBlock},
     utils::{bitonic_sort_by_keys, CompleteBinaryTreeIndex, TreeIndex},
-    Identifier, BucketSize, OsamBlock, OsamError, StashSize,
+    BucketSize, Identifier, OsamBlock, OsamError, StashSize,
 };
 
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq};
@@ -227,9 +227,10 @@ impl<V: OsamBlock> ObliviousStash<V> {
             position: new_position,
         };
 
-        // Overwrite the first dummy 
+        // Overwrite the first dummy block
         let mut assigned = Choice::from(0);
         let read_from_path_indices: usize = usize::try_from(self.path_size)?;
+
         // Skip the first `path_size` indices in the stash, since these are 
         // overwritten upon calling read_from_path
         for block in self

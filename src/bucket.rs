@@ -17,7 +17,7 @@ use rand::{
 
 use crate::BucketSize;
 
-use crate::{utils::TreeIndex, Identifier};
+use crate::{Identifier, utils::TreeIndex};
 use subtle::ConstantTimeEq;
 
 #[derive(Clone, Copy, Debug, PartialEq)]

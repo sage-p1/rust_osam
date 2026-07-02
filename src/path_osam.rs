@@ -11,7 +11,7 @@ use super::stash::ObliviousStash;
 use crate::{
     bucket::Bucket,
     utils::{CompleteBinaryTreeIndex, TreeHeight, TreeIndex},
-    Identifier, BucketSize, Osam, OsamBlock, OsamError, StashSize,
+    BucketSize, Identifier, Osam, OsamBlock, OsamError, StashSize,
 };
 use rand::{CryptoRng, Rng};
 use bit_reverse::ParallelReverse;
@@ -127,6 +127,10 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
         })
     }
 
+    // pub fn stash_size(&) {
+
+    // }
+
     #[cfg(test)]
     pub(crate) fn stash_occupancy(&self) -> StashSize {
         self.stash.occupancy()
@@ -153,7 +157,7 @@ impl<V: OsamBlock, const Z: BucketSize> Osam for PathOsam<V, Z> {
         Ok((identifier, position))
     }
 
-    fn write<R: Rng + CryptoRng>(
+    fn write_and_evict<R: Rng + CryptoRng>(
         &mut self,
         new_identifier: Identifier,
         new_position: TreeIndex,
@@ -175,6 +179,22 @@ impl<V: OsamBlock, const Z: BucketSize> Osam for PathOsam<V, Z> {
         // replacing them with dummy blocks.
         let evict_position = self.evict_position()?;
         self.stash.write_to_path(&mut self.physical_memory, evict_position)?;
+
+        Ok(())
+    }
+
+    fn write_no_evict(
+        &mut self,
+        new_identifier: Identifier,
+        new_position: TreeIndex,
+        new_value: Self::V,
+    ) -> Result<(), OsamError> {
+        assert_ne!(new_identifier, Identifier::MAX);
+        assert!(new_position.is_leaf(self.height));
+
+        // Add new block to stash by replacing a dummy block
+        // Do this locally without interacting with the server
+        self.stash.write_to_stash(new_identifier, new_position, new_value)?;
 
         Ok(())
     }
@@ -221,7 +241,7 @@ mod tests {
 
     use crate::{bucket::*, test_utils::*};
 
-    // Test default parameters. For the small capacity used in the tests, this means a linear position map.
+    // Test default parameters. 
     create_path_osam_correctness_tests!(4, 40);
 
     // Test small initial stash sizes and correct resizing of stash on overflow.

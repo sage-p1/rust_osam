@@ -13,7 +13,9 @@ use subtle::{Choice, ConditionallySelectable, ConstantTimeGreater, ConstantTimeL
 
 use std::num::TryFromIntError;
 
-pub(crate) type TreeIndex = u64;
+/// Numeric type used to assign positions buckets in the PathOsam tree.
+pub type TreeIndex = u64;
+
 pub(crate) type TreeHeight = u64;
 
 pub(crate) trait CompleteBinaryTreeIndex
