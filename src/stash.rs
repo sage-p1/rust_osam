@@ -25,7 +25,7 @@ pub struct ObliviousStash<V: OsamBlock> {
 }
 
 impl<V: OsamBlock> ObliviousStash<V> {
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.blocks.len()
     }
 }
@@ -290,11 +290,10 @@ impl<V: OsamBlock> ObliviousStash<V> {
         Ok(output)
     }
 
-    #[cfg(test)]
     pub fn occupancy(&self) -> StashSize {
         let mut result = 0;
         for i in self.path_size.try_into().unwrap()..(self.blocks.len()) {
-            if !self.blocks[i].is_dummy() {
+            if (!self.blocks[i].ct_is_dummy()).into() {
                 result += 1;
             }
         }

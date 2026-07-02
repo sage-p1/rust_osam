@@ -38,22 +38,28 @@ pub(crate) fn init_logger() {
 }
 
 /// Tests the correctness of an `OSAM` implementation T on a sequence of all writes then reads
-pub(crate) fn write_and_evict_then_read<T: Osam>(osam: &mut T, bucket_size: usize, operation_factor: usize, stash_size_experiment: bool)
+pub(crate) fn write_then_read<T: Osam>(
+    osam: &mut T, 
+    bucket_size: BucketSize, 
+    operation_factor: usize, 
+    overflow_size: StashSize,
+    stash_size_experiment: bool
+)
 where
     Standard: Distribution<T::V>,
 {
     init_logger();
     let mut rng = StdRng::seed_from_u64(0);
 
-    // let num_operations = (capacity * bucket_size).div(2);
     let capacity = osam.block_capacity();
-    let num_operations: usize;
+    let mut num_operations: usize;
     if stash_size_experiment {
         num_operations = (capacity * bucket_size).div(2);
     } else {
         num_operations = capacity * bucket_size * operation_factor;
+        num_operations += usize::try_from(overflow_size).unwrap().div(2);
     }
-    
+
     let mut mirror_hash_map = HashMap::new();
 
     // Generate a sequence of allocs and write a random value
@@ -62,23 +68,43 @@ where
         let identifier = address.0;
         let position = address.1;
         let random_block_value = rng.gen::<T::V>();
-        let _ = osam.write_and_evict(identifier, position, random_block_value, &mut rng);
+        let _ = osam.write(identifier, position, random_block_value, &mut rng);
         mirror_hash_map.insert(address, random_block_value);
     }
 
+    assert_eq!(
+        osam.write_counter(),
+        StashSize::try_from(osam.alloc_counter()).unwrap()
+    );
+
     // Assert reads fetch the proper data block
-    for (address, &random_block_value) in mirror_hash_map.iter() {
+    for (address, random_block_value) in mirror_hash_map.iter() {
         let identifier = address.0;
         let position = address.1;
         assert_eq!(
             osam.read(identifier, position).unwrap().unwrap(),
-            random_block_value
-        )
+            *random_block_value
+        );
     }
+
+    assert_eq!(
+        osam.write_counter(),
+        StashSize::try_from(osam.alloc_counter()).unwrap()
+    );
+    assert_eq!(
+        osam.write_counter(),
+        osam.read_counter()
+    );
 }
 
 /// Tests the correctness of an `OSAM` implementation T on a sequence of all reads then writes
-pub(crate) fn read_then_write_and_evict<T: Osam>(osam: &mut T, bucket_size: usize, operation_factor: usize, stash_size_experiment: bool)
+pub(crate) fn read_then_write<T: Osam>(
+    osam: &mut T, 
+    bucket_size: BucketSize, 
+    operation_factor: usize, 
+    overflow_size: StashSize,
+    stash_size_experiment: bool
+)
 where
     Standard: Distribution<T::V>,
 {
@@ -86,11 +112,12 @@ where
     let mut rng = StdRng::seed_from_u64(0);
 
     let capacity = osam.block_capacity();
-    let num_operations: usize;
+    let mut num_operations: usize;
     if stash_size_experiment {
         num_operations = (capacity * bucket_size).div(2);
     } else {
         num_operations = capacity * bucket_size * operation_factor;
+        num_operations += usize::try_from(overflow_size).unwrap().div(2);
     }
 
     // Generate a sequence of allocs and write a random value
@@ -102,23 +129,241 @@ where
             osam.read(identifier, position).unwrap(),
             None
         );
-        let _ = osam.write_and_evict(identifier, position, T::V::default(), &mut rng);
+        let _ = osam.write(identifier, position, T::V::default(), &mut rng);
     }
+
+    assert_eq!(
+        osam.read_counter(),
+        StashSize::try_from(osam.alloc_counter()).unwrap()
+    );
+    assert_eq!(
+        osam.read_counter(),
+        osam.write_counter()
+    );
 }
+
+/// Tests the correctness of an `OSAM` implementation T on a sequence where
+/// 1) the first half of writes are made to the OSAM
+/// 2) read half of these writes (quarter of all writes)
+/// 3) the second half of writes are done
+/// 4) read all remaining writes
+pub(crate) fn interspersed_write_and_read<T: Osam>(
+    osam: &mut T, 
+    bucket_size: BucketSize, 
+    operation_factor: usize, 
+    overflow_size: StashSize,
+    stash_size_experiment: bool
+)
+where
+    Standard: Distribution<T::V>,
+{
+    init_logger();
+    let mut rng = StdRng::seed_from_u64(0);
+
+    let capacity = osam.block_capacity();
+    let mut num_operations: usize;
+    if stash_size_experiment {
+        num_operations = (capacity * bucket_size).div(2);
+    } else {
+        num_operations = capacity * bucket_size * operation_factor;
+        num_operations += usize::try_from(overflow_size).unwrap().div(2);
+    }
+    let half = num_operations.div(2);
+    let quarter = num_operations.div(4);
+
+    let mut mirror_hash_map = HashMap::new();
+
+    // Generate the first half of allocs and write a random value
+    for _ in 0..half {
+        let address = osam.alloc(&mut rng).unwrap();
+        let identifier = address.0;
+        let position = address.1;
+        let random_block_value = rng.gen::<T::V>();
+        let _ = osam.write(identifier, position, random_block_value, &mut rng);
+        mirror_hash_map.insert(address, random_block_value);
+    }
+
+    assert_eq!(
+        osam.write_counter(),
+        StashSize::try_from(osam.alloc_counter()).unwrap()
+    );
+
+    // Assert reads fetch the proper data block for half the first writes (quarter of all)
+    let mut used_addresses = Vec::new();
+    let mut counter = 0;
+    for (address, random_block_value) in mirror_hash_map.iter() {
+        if counter >= quarter {
+            break;
+        }
+        let identifier = address.0;
+        let position = address.1;
+        assert_eq!(
+            osam.read(identifier, position).unwrap().unwrap(),
+            *random_block_value
+        );
+        used_addresses.push(address.to_owned());
+        counter += 1;
+    }
+
+    // Remove used addresses to avoid double reading
+    for address in used_addresses.iter() {
+        mirror_hash_map.remove(address);
+    }
+
+    assert_eq!(
+        osam.read_counter(),
+        StashSize::try_from(quarter).unwrap()
+    );
+
+    // Generate the second half of allocs and write a random value
+    for _ in half..num_operations {
+        let address = osam.alloc(&mut rng).unwrap();
+        let identifier = address.0;
+        let position = address.1;
+        let random_block_value = rng.gen::<T::V>();
+        let _ = osam.write(identifier, position, random_block_value, &mut rng);
+        mirror_hash_map.insert(address, random_block_value);
+    }
+
+    // Assert the remaining three quarters of reads are correct
+    for (address, random_block_value) in mirror_hash_map.iter() {
+        let identifier = address.0;
+        let position = address.1;
+        assert_eq!(
+            osam.read(identifier, position).unwrap().unwrap(),
+            *random_block_value
+        );
+    }
+
+    assert_eq!(
+        osam.write_counter(),
+        StashSize::try_from(osam.alloc_counter()).unwrap()
+    );
+    assert_eq!(
+        osam.write_counter(),
+        osam.read_counter()
+    );
+}
+
+/// Tests the correctness of an `OSAM` implementation T on a sequence where
+/// 1) the first quarter of writes are locally to the stash
+/// 2) read all of these writes 
+/// 3) the last three quarters writes are made to the OSAM
+/// 4) read all remaining writes
+pub(crate) fn locally_interspersed_write_and_read<T: Osam>(
+    osam: &mut T, 
+    bucket_size: BucketSize, 
+    operation_factor: usize, 
+    overflow_size: StashSize,
+    stash_size_experiment: bool
+)
+where
+    Standard: Distribution<T::V>,
+{
+    init_logger();
+    let mut rng = StdRng::seed_from_u64(0);
+
+    let capacity = osam.block_capacity();
+    let mut num_operations: usize;
+    if stash_size_experiment {
+        num_operations = (capacity * bucket_size).div(2);
+    } else {
+        num_operations = capacity * bucket_size * operation_factor;
+        num_operations += usize::try_from(overflow_size).unwrap().div(2);
+    }
+    let quarter = num_operations.div(4);
+
+    let mut mirror_hash_map = HashMap::new();
+
+    // Generate the first half of allocs and write a random value
+    for _ in 0..quarter {
+        let address = osam.alloc(&mut rng).unwrap();
+        let identifier = address.0;
+        let position = address.1;
+        let random_block_value = rng.gen::<T::V>();
+        let _ = osam.local_write(identifier, position, random_block_value);
+        mirror_hash_map.insert(address, random_block_value);
+    }
+
+    assert_eq!(
+        osam.local_write_counter(),
+        StashSize::try_from(osam.alloc_counter()).unwrap()
+    );
+    assert_eq!(osam.write_counter(), 0);
+    assert_eq!(osam.round_trip_counter(), 0);
+
+    // Assert reads fetch the proper data block for half the first writes (quarter of all)
+    for (address, random_block_value) in mirror_hash_map.iter() {
+        let identifier = address.0;
+        let position = address.1;
+        assert_eq!(
+            osam.read(identifier, position).unwrap().unwrap(),
+            *random_block_value
+        );
+    }
+    mirror_hash_map.clear();
+
+    assert_eq!(
+        osam.read_counter(),
+        StashSize::try_from(quarter).unwrap()
+    );
+
+    // Generate the second half of allocs and write a random value
+    for _ in quarter..num_operations {
+        let address = osam.alloc(&mut rng).unwrap();
+        let identifier = address.0;
+        let position = address.1;
+        let random_block_value = rng.gen::<T::V>();
+        let _ = osam.write(identifier, position, random_block_value, &mut rng);
+        mirror_hash_map.insert(address, random_block_value);
+    }
+
+    // Assert the remaining three quarters of reads are correct
+    for (address, random_block_value) in mirror_hash_map.iter() {
+        let identifier = address.0;
+        let position = address.1;
+        assert_eq!(
+            osam.read(identifier, position).unwrap().unwrap(),
+            *random_block_value
+        );
+    }
+
+    assert_eq!(
+        osam.local_write_counter() + osam.write_counter(),
+        StashSize::try_from(osam.alloc_counter()).unwrap()
+    );
+    assert_eq!(
+        osam.local_write_counter() + osam.write_counter(),
+        osam.read_counter()
+    );
+}
+
 
 macro_rules! create_path_osam_correctness_tests_all_parameters {
     ($osam_type: ident, $prefix: literal, $block_capacity: expr, $block_size: expr, $bucket_size: expr, $overflow_size: expr, $operation_factor: expr, $stash_size_experiment: expr) => {
         paste::paste! {
             #[test]
-            fn [<"write_and_evict_then_read" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor _ $stash_size_experiment>]() {
+            fn [<"write_then_read" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor _ $stash_size_experiment>]() {
                 let mut osam = $osam_type::<BlockValue<$block_size>, $bucket_size>::new_with_parameters($block_capacity, $overflow_size).unwrap();
-                write_and_evict_then_read(&mut osam, $bucket_size, $operation_factor, $stash_size_experiment);
+                write_then_read(&mut osam, $bucket_size, $operation_factor, $overflow_size, $stash_size_experiment);
             }
 
             #[test]
-            fn [<"read_then_write_and_evict" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor _ $stash_size_experiment>]() {
+            fn [<"read_then_write" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor _ $stash_size_experiment>]() {
                 let mut osam = $osam_type::<BlockValue<$block_size>, $bucket_size>::new_with_parameters($block_capacity, $overflow_size).unwrap();
-                read_then_write_and_evict(&mut osam, $bucket_size, $operation_factor, $stash_size_experiment);
+                read_then_write(&mut osam, $bucket_size, $operation_factor, $overflow_size, $stash_size_experiment);
+            }
+
+            #[test]
+            fn [<"interspersed_write_and_read" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor _ $stash_size_experiment>]() {
+                let mut osam = $osam_type::<BlockValue<$block_size>, $bucket_size>::new_with_parameters($block_capacity, $overflow_size).unwrap();
+                interspersed_write_and_read(&mut osam, $bucket_size, $operation_factor, $overflow_size, $stash_size_experiment);
+            }
+
+            #[test]
+            fn [<"locally_interspersed_write_and_read" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor _ $stash_size_experiment>]() {
+                let mut osam = $osam_type::<BlockValue<$block_size>, $bucket_size>::new_with_parameters($block_capacity, $overflow_size).unwrap();
+                locally_interspersed_write_and_read(&mut osam, $bucket_size, $operation_factor, $overflow_size, $stash_size_experiment);
             }
         }
     };
@@ -184,7 +429,7 @@ macro_rules! create_path_osam_correctness_tests {
     ($bucket_size: expr, $overflow_size: expr) => {
         create_path_osam_correctness_tests_helper!(
             PathOsam,
-            "",
+            "_",
             $bucket_size,
             $overflow_size,
             false
@@ -238,26 +483,26 @@ impl<V: OsamBlock, const Z: BucketSize> Osam for StashSizeMonitor<V, Z> {
         self.osam.alloc(rng)
     }
 
-    fn write_and_evict<R: Rng + CryptoRng>(
+    fn write<R: Rng + CryptoRng>(
         &mut self,
         new_identifier: Identifier,
         new_position: TreeIndex,
         new_value: Self::V,
         rng: &mut R,
     ) -> Result<(), OsamError> {
-        let result = self.osam.write_and_evict(new_identifier, new_position, new_value, rng);
+        let result = self.osam.write(new_identifier, new_position, new_value, rng);
         let stash_size = self.osam.stash_occupancy();
         assert!(stash_size < 10);
         result
     }
 
-    fn write_no_evict(
+    fn local_write(
         &mut self,
         new_identifier: Identifier,
         new_position: TreeIndex,
         new_value: Self::V,
     ) -> Result<(), OsamError> {
-        let result = self.osam.write_no_evict(new_identifier, new_position, new_value);
+        let result = self.osam.local_write(new_identifier, new_position, new_value);
         let stash_size = self.osam.stash_occupancy();
         assert!(stash_size < 10);
         result
@@ -276,6 +521,54 @@ impl<V: OsamBlock, const Z: BucketSize> Osam for StashSizeMonitor<V, Z> {
 
     fn evict_position(&mut self) -> Result<TreeIndex, OsamError> {
         self.osam.evict_position()
+    }
+
+    fn stash_occupancy(&self) -> StashSize {
+        self.osam.stash_occupancy()
+    }
+
+    fn stash_size(&self) -> usize {
+        self.osam.stash_size()
+    }
+
+    fn update_stash_stats(&mut self) {
+        self.osam.update_stash_stats();
+    }
+
+    fn max_occupancy(&self) -> StashSize {
+        self.osam.max_occupancy()
+    }
+
+    fn variance(&self) -> f64 {
+        self.osam.variance()       
+    }
+
+    fn standard_deviation(&self) -> f64 {
+        self.osam.standard_deviation()
+    }
+
+    fn variance_and_standard_deviation(&self) -> (f64, f64) {
+        self.osam.variance_and_standard_deviation()
+    }
+
+    fn alloc_counter(&self) -> Identifier {
+        self.osam.alloc_counter()
+    }
+
+    fn write_counter(&self) -> StashSize {
+        self.osam.write_counter()
+    }
+
+    fn local_write_counter(&self) -> StashSize {
+        self.osam.local_write_counter()
+    }
+
+    fn read_counter(&self) -> StashSize {
+        self.osam.read_counter()
+    }
+
+    fn round_trip_counter(&self) -> StashSize {
+        self.osam.round_trip_counter()
     }
 }
 

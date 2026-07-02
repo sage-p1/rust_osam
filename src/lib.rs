@@ -52,7 +52,7 @@
 //!     addresses[i] = address;
 //!     let identifier = address.0;
 //!     let position = address.1;
-//!     let _ = osam.write_and_evict(identifier, position, BlockValue::new(*bytes), &mut rng)?;
+//!     let _ = osam.write(identifier, position, BlockValue::new(*bytes), &mut rng)?;
 //! }
 //!
 //! // Now you can safely make secret-dependent accesses to your database.
@@ -127,6 +127,8 @@ pub type Identifier = u64;
 pub type BucketSize = usize;
 /// Numeric type used to represent the size of a Path OSAM stash in blocks.
 pub type StashSize = u64;
+/// Numeric type used to represent the evict counter in Path Osam.
+pub type CounterSize = u64;
 
 /// A "trait alias" for OSAM blocks: the values read and written by OSAMs.
 pub trait OsamBlock:
@@ -178,7 +180,7 @@ where
     ) -> Result<(Identifier, TreeIndex), OsamError>;
 
     /// Obliviously writes the value stored `identifier` and `position`. Evicts blocks to server.
-    fn write_and_evict<R: RngCore + CryptoRng>(
+    fn write<R: RngCore + CryptoRng>(
         &mut self,
         new_identifier: Identifier,
         new_position: TreeIndex,
@@ -187,7 +189,7 @@ where
     ) -> Result<(), OsamError>;
 
     /// Locally writes the value stored `identifier` and `position` to stash. Does not evict to server.
-    fn write_no_evict(
+    fn local_write(
         &mut self,
         new_identifier: Identifier,
         new_position: TreeIndex,
@@ -203,4 +205,40 @@ where
 
     /// Calculates the next position to evict
     fn evict_position(&mut self) -> Result<TreeIndex, OsamError>;
+
+    /// Outputs the number of real blocks in the stash
+    fn stash_occupancy(&self) -> StashSize;
+
+    /// Outputs the total size of the stash
+    fn stash_size(&self) -> usize;
+
+    /// Updates maximum occupancy and bookmarks current occupancy
+    fn update_stash_stats(&mut self);
+
+    /// Outputs the maximum stash occupancy
+    fn max_occupancy(&self) -> StashSize;
+
+    /// Calculates and outputs variance of stash occupancy
+    fn variance(&self) -> f64;
+
+    /// Calculates and outputs standard deviation of stash occupancy
+    fn standard_deviation(&self) -> f64;
+
+    /// Outputs variance and standard deviation of stash occupancy together 
+    fn variance_and_standard_deviation(&self) -> (f64, f64);
+
+    /// Outputs the number of allocs
+    fn alloc_counter(&self) -> Identifier;
+
+    /// Outputs the number of writes with eviction
+    fn write_counter(&self) -> StashSize;
+
+    /// Outputs the number of local writes without eviction
+    fn local_write_counter(&self) -> StashSize;
+
+    /// Outputs the number of reads
+    fn read_counter(&self) -> StashSize;
+
+    /// Outputs the number of round trips
+    fn round_trip_counter(&self) -> StashSize;
 }

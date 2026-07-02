@@ -84,11 +84,6 @@ impl<V: OsamBlock> PathOsamBlock<V> {
     pub fn ct_is_dummy(&self) -> Choice {
         self.position.ct_eq(&Self::DUMMY_POSITION)
     }
-
-    #[cfg(test)]
-    pub fn is_dummy(&self) -> bool {
-        self.position == Self::DUMMY_POSITION
-    }
 }
 
 impl<V: OsamBlock> std::fmt::Debug for PathOsamBlock<V> {

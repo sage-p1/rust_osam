@@ -11,10 +11,11 @@ use super::stash::ObliviousStash;
 use crate::{
     bucket::Bucket,
     utils::{CompleteBinaryTreeIndex, TreeHeight, TreeIndex},
-    BucketSize, Identifier, Osam, OsamBlock, OsamError, StashSize,
+    BucketSize, CounterSize, Identifier, Osam, OsamBlock, OsamError, StashSize,
 };
 use rand::{CryptoRng, Rng};
 use bit_reverse::ParallelReverse;
+use std::collections::HashMap;
 
 /// The parameter "Z" from the Path OSAM literature that sets the number of blocks per bucket; typical values are 3 or 4.
 /// Here we adopt the more conservative setting of 4.
@@ -59,10 +60,25 @@ pub struct PathOsam<V: OsamBlock, const Z: BucketSize> {
     stash: ObliviousStash<V>,
     /// The height of the Path OSAM tree data structure.
     height: TreeHeight,
-    /// The counter that assigns identifiers to Path OSAM blocks.
+    /// The counter that assigns identifiers to Path OSAM blocks. 
+    // Also serves as the alloc counter.
     identifier_counter: Identifier,
     /// The counter that deterministically picks which path evict.
-    evict_counter: Identifier,
+    evict_counter: CounterSize,
+    /// The maximum occupancy (number of real blocks) observed in the stash at once.
+    max_occupancy: StashSize,
+    /// A mapping of occupancies to the number of occurrences.
+    all_occupancies: HashMap<StashSize, StashSize>,
+    /// The counter tracking the number of writes made with eviction.
+    write_counter: CounterSize,
+    /// The counter tracking the number of writes made without eviction.
+    local_write_counter: CounterSize,
+    /// The counter tracking the number of reads.
+    read_counter: CounterSize,
+    /// The counter tracking the number of round-trips, which is a defined as one
+    /// instance of reading a path and then writing a path. This should equal
+    /// write_counter + read_counter
+    round_trip_counter: CounterSize,
 }
 
 impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
@@ -115,8 +131,15 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
         let mut physical_memory = Vec::new();
         physical_memory.resize(usize::try_from(number_of_nodes)?, Bucket::<V, Z>::default());
 
-        let identifier_counter: u64 = 1;
-        let evict_counter: u64 = 0;
+        // Initialize other parameters
+        let identifier_counter: Identifier = 1;
+        let evict_counter: CounterSize = 0;
+        let max_occupancy: StashSize = 0;
+        let all_occupancies: HashMap<StashSize, StashSize> = HashMap::new();
+        let write_counter: CounterSize = 0;
+        let local_write_counter: CounterSize = 0;
+        let read_counter: CounterSize = 0;
+        let round_trip_counter: CounterSize = 0;
 
         Ok(Self {
             physical_memory,
@@ -124,16 +147,13 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
             height,
             identifier_counter,
             evict_counter,
+            max_occupancy,
+            all_occupancies,
+            write_counter,
+            local_write_counter,
+            read_counter,
+            round_trip_counter,
         })
-    }
-
-    // pub fn stash_size(&) {
-
-    // }
-
-    #[cfg(test)]
-    pub(crate) fn stash_occupancy(&self) -> StashSize {
-        self.stash.occupancy()
     }
 }
 
@@ -157,7 +177,7 @@ impl<V: OsamBlock, const Z: BucketSize> Osam for PathOsam<V, Z> {
         Ok((identifier, position))
     }
 
-    fn write_and_evict<R: Rng + CryptoRng>(
+    fn write<R: Rng + CryptoRng>(
         &mut self,
         new_identifier: Identifier,
         new_position: TreeIndex,
@@ -176,14 +196,19 @@ impl<V: OsamBlock, const Z: BucketSize> Osam for PathOsam<V, Z> {
         self.stash.write_to_stash(new_identifier, new_position, new_value)?;
 
         // Evict blocks from the stash into the path that was just read,
-        // replacing them with dummy blocks.
+        // replacing them with dummy blocks
         let evict_position = self.evict_position()?;
         self.stash.write_to_path(&mut self.physical_memory, evict_position)?;
+
+        // Bookkeeping of OSAM stats
+        self.update_stash_stats();
+        self.write_counter += 1;
+        self.round_trip_counter += 1;
 
         Ok(())
     }
 
-    fn write_no_evict(
+    fn local_write(
         &mut self,
         new_identifier: Identifier,
         new_position: TreeIndex,
@@ -195,6 +220,10 @@ impl<V: OsamBlock, const Z: BucketSize> Osam for PathOsam<V, Z> {
         // Add new block to stash by replacing a dummy block
         // Do this locally without interacting with the server
         self.stash.write_to_stash(new_identifier, new_position, new_value)?;
+
+        // Bookkeeping of OSAM stats
+        self.update_stash_stats();
+        self.local_write_counter += 1;
 
         Ok(())
     }
@@ -218,6 +247,11 @@ impl<V: OsamBlock, const Z: BucketSize> Osam for PathOsam<V, Z> {
         let evict_position = self.evict_position()?;
         self.stash.write_to_path(&mut self.physical_memory, evict_position)?;
 
+        // Bookkeeping of OSAM stats
+        self.update_stash_stats();
+        self.read_counter += 1;
+        self.round_trip_counter += 1;
+
         Ok(result)
     }
 
@@ -233,6 +267,77 @@ impl<V: OsamBlock, const Z: BucketSize> Osam for PathOsam<V, Z> {
         self.evict_counter += 1;
         Ok(evict_position)
     } 
+
+    fn stash_occupancy(&self) -> StashSize {
+        self.stash.occupancy()
+    }
+
+    fn stash_size(&self) -> usize {
+        self.stash.len()
+    }
+
+    fn update_stash_stats(&mut self) {
+        let current_occupancy = self.stash_occupancy();
+        if current_occupancy > self.max_occupancy {
+            self.max_occupancy = current_occupancy;
+        }
+        let count = self.all_occupancies.entry(current_occupancy).or_insert(0);
+        *count += 1;
+    }
+
+    fn max_occupancy(&self) -> StashSize {
+        self.max_occupancy
+    }
+
+    fn variance(&self) -> f64 {
+        // Calculate average occupancy
+        let mut sum = 0;
+        let mut num_occurrences = 0;
+        for (occupancy, count) in self.all_occupancies.iter() {
+            sum += occupancy * count;
+            num_occurrences += count;
+        }
+        let average = (sum as f64) / (num_occurrences as f64);
+
+        // Calculate probability and variance per occupancy
+        let mut variance: f64 = 0.0;
+        for (occupancy, count) in self.all_occupancies.iter() {
+            let squared_term = ((*occupancy as f64) - average).powi(2);
+            let probability = (*count as f64) / (num_occurrences as f64);
+            variance += squared_term * probability;
+        }
+        variance     
+    }
+
+    fn standard_deviation(&self) -> f64 {
+        self.variance().powf(0.5)
+    }
+
+    fn variance_and_standard_deviation(&self) -> (f64, f64) {
+        let variance = self.variance();
+        let standard_deviation = variance.powf(0.5);
+        (variance, standard_deviation)
+    }
+
+    fn alloc_counter(&self) -> Identifier {
+        self.identifier_counter - 1
+    }
+
+    fn write_counter(&self) -> StashSize {
+        self.write_counter
+    }
+
+    fn local_write_counter(&self) -> StashSize {
+        self.local_write_counter
+    }
+
+    fn read_counter(&self) -> StashSize {
+        self.read_counter
+    }
+
+    fn round_trip_counter(&self) -> StashSize {
+        self.round_trip_counter
+    }
 }
 
 #[cfg(test)]
