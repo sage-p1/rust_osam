@@ -28,7 +28,7 @@
 //! The below example reads a database from memory into an OSAM, thus permitting secret-dependent accesses.
 //!
 //! ```
-//! use osam::{BlockSize, BlockValue, Identifier, Osam, PathOsam, TreeIndex};
+//! use osam::{BlockSize, BlockValue, Identifier, PathOsam, TreeIndex};
 //! use osam::path_osam::{DEFAULT_BLOCKS_PER_BUCKET, DEFAULT_STASH_OVERFLOW_SIZE};
 //! # use osam::OsamError;
 //!
@@ -80,7 +80,7 @@
 //!
 //! ```
 //! use osam::{BlockSize, BlockValue, BucketSize,
-//!             Identifier, Osam, PathOsam, StashSize};
+//!             Identifier, PathOsam, StashSize};
 //! use osam::path_osam::{DEFAULT_BLOCKS_PER_BUCKET, DEFAULT_STASH_OVERFLOW_SIZE};
 //! # use osam::OsamError;
 //! # let mut rng = rand::rngs::OsRng;
@@ -103,7 +103,6 @@
 
 use std::num::TryFromIntError;
 
-use rand::{CryptoRng, RngCore};
 use subtle::ConditionallySelectable;
 use thiserror::Error;
 // use utils::TreeIndex;
@@ -127,7 +126,7 @@ pub type Identifier = u64;
 pub type BucketSize = usize;
 /// Numeric type used to represent the size of a Path OSAM stash in blocks.
 pub type StashSize = u64;
-/// Numeric type used to represent the evict counter in Path Osam.
+/// Numeric type used to represent the evict counter in Path OSAM.
 pub type CounterSize = u64;
 
 /// A "trait alias" for OSAM blocks: the values read and written by OSAMs.
@@ -159,86 +158,4 @@ pub enum OsamError {
         /// Its invalid value.
         parameter_value: String,
     },
-}
-
-/// Represents an oblivious SAM (OSAM) mapping identifiers of type `Identifier` 
-/// and positions of type `TreeIndex` to values of type `V: OsamBlock`.
-pub trait Osam
-where
-    Self: Sized,
-{
-    /// The type of elements stored in the OSAM.
-    type V: OsamBlock;
-
-    /// Returns the capacity in blocks of this OSAM.
-    fn block_capacity(&self) -> usize;
-
-    /// Allocates a valid Identifier and TreeIndex to be used for reading and writing
-    fn alloc<R: RngCore + CryptoRng>(
-        &mut self,
-        rng: &mut R,
-    ) -> Result<(Identifier, TreeIndex), OsamError>;
-
-    /// Obliviously writes the value stored `identifier` and `position`. Evicts blocks to server.
-    fn write<R: RngCore + CryptoRng>(
-        &mut self,
-        identifier: Identifier,
-        position: TreeIndex,
-        value: Self::V,
-        rng: &mut R,
-    ) -> Result<(), OsamError>;
-
-    /// Locally writes the value stored `identifier` and `position` to stash. Does not evict to server.
-    fn local_write(
-        &mut self,
-        identifier: Identifier,
-        position: TreeIndex,
-        value: Self::V,
-    ) -> Result<(), OsamError>;
-
-    /// Obliviously reads the value stored at `index`.
-    fn read(
-        &mut self,
-        identifier: Identifier,
-        position: TreeIndex,
-    ) -> Result<Option<Self::V>, OsamError>;
-
-    /// Calculates the next position to evict
-    fn evict_position(&mut self) -> Result<TreeIndex, OsamError>;
-
-    /// Outputs the number of real blocks in the stash
-    fn stash_occupancy(&self) -> StashSize;
-
-    /// Outputs the total size of the stash
-    fn stash_size(&self) -> usize;
-
-    /// Updates maximum occupancy and bookmarks current occupancy
-    fn update_stash_stats(&mut self);
-
-    /// Outputs the maximum stash occupancy
-    fn max_occupancy(&self) -> StashSize;
-
-    /// Calculates and outputs variance of stash occupancy
-    fn variance(&self) -> f64;
-
-    /// Calculates and outputs standard deviation of stash occupancy
-    fn standard_deviation(&self) -> f64;
-
-    /// Outputs variance and standard deviation of stash occupancy together 
-    fn variance_and_standard_deviation(&self) -> (f64, f64);
-
-    /// Outputs the number of allocs
-    fn alloc_counter(&self) -> Identifier;
-
-    /// Outputs the number of writes with eviction
-    fn write_counter(&self) -> StashSize;
-
-    /// Outputs the number of local writes without eviction
-    fn local_write_counter(&self) -> StashSize;
-
-    /// Outputs the number of reads
-    fn read_counter(&self) -> StashSize;
-
-    /// Outputs the number of round trips
-    fn round_trip_counter(&self) -> StashSize;
 }
