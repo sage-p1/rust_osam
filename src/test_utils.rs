@@ -485,12 +485,12 @@ impl<V: OsamBlock, const Z: BucketSize> Osam for StashSizeMonitor<V, Z> {
 
     fn write<R: Rng + CryptoRng>(
         &mut self,
-        new_identifier: Identifier,
-        new_position: TreeIndex,
-        new_value: Self::V,
+        identifier: Identifier,
+        position: TreeIndex,
+        value: Self::V,
         rng: &mut R,
     ) -> Result<(), OsamError> {
-        let result = self.osam.write(new_identifier, new_position, new_value, rng);
+        let result = self.osam.write(identifier, position, value, rng);
         let stash_size = self.osam.stash_occupancy();
         assert!(stash_size < 10);
         result
@@ -498,11 +498,11 @@ impl<V: OsamBlock, const Z: BucketSize> Osam for StashSizeMonitor<V, Z> {
 
     fn local_write(
         &mut self,
-        new_identifier: Identifier,
-        new_position: TreeIndex,
-        new_value: Self::V,
+        identifier: Identifier,
+        position: TreeIndex,
+        value: Self::V,
     ) -> Result<(), OsamError> {
-        let result = self.osam.local_write(new_identifier, new_position, new_value);
+        let result = self.osam.local_write(identifier, position, value);
         let stash_size = self.osam.stash_occupancy();
         assert!(stash_size < 10);
         result

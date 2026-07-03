@@ -182,18 +182,18 @@ where
     /// Obliviously writes the value stored `identifier` and `position`. Evicts blocks to server.
     fn write<R: RngCore + CryptoRng>(
         &mut self,
-        new_identifier: Identifier,
-        new_position: TreeIndex,
-        new_value: Self::V,
+        identifier: Identifier,
+        position: TreeIndex,
+        value: Self::V,
         rng: &mut R,
     ) -> Result<(), OsamError>;
 
     /// Locally writes the value stored `identifier` and `position` to stash. Does not evict to server.
     fn local_write(
         &mut self,
-        new_identifier: Identifier,
-        new_position: TreeIndex,
-        new_value: Self::V,
+        identifier: Identifier,
+        position: TreeIndex,
+        value: Self::V,
     ) -> Result<(), OsamError>;
 
     /// Obliviously reads the value stored at `index`.

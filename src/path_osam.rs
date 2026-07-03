@@ -179,13 +179,13 @@ impl<V: OsamBlock, const Z: BucketSize> Osam for PathOsam<V, Z> {
 
     fn write<R: Rng + CryptoRng>(
         &mut self,
-        new_identifier: Identifier,
-        new_position: TreeIndex,
-        new_value: Self::V,
+        identifier: Identifier,
+        position: TreeIndex,
+        value: Self::V,
         rng: &mut R,
     ) -> Result<(), OsamError> {
-        assert_ne!(new_identifier, Identifier::MAX);
-        assert!(new_position.is_leaf(self.height));
+        assert_ne!(identifier, Identifier::MAX);
+        assert!(position.is_leaf(self.height));
 
         // Read a dummy path to make reads and writes indistinguishable
         let dummy_position: TreeIndex = CompleteBinaryTreeIndex::random_leaf(self.height, rng)?;
@@ -193,7 +193,7 @@ impl<V: OsamBlock, const Z: BucketSize> Osam for PathOsam<V, Z> {
         self.stash.read_from_path(&mut self.physical_memory, dummy_position)?;
 
         // Add new block to stash by replacing a dummy block
-        self.stash.write_to_stash(new_identifier, new_position, new_value)?;
+        self.stash.write_to_stash(identifier, position, value)?;
 
         // Evict blocks from the stash into the path that was just read,
         // replacing them with dummy blocks
@@ -210,16 +210,16 @@ impl<V: OsamBlock, const Z: BucketSize> Osam for PathOsam<V, Z> {
 
     fn local_write(
         &mut self,
-        new_identifier: Identifier,
-        new_position: TreeIndex,
-        new_value: Self::V,
+        identifier: Identifier,
+        position: TreeIndex,
+        value: Self::V,
     ) -> Result<(), OsamError> {
-        assert_ne!(new_identifier, Identifier::MAX);
-        assert!(new_position.is_leaf(self.height));
+        assert_ne!(identifier, Identifier::MAX);
+        assert!(position.is_leaf(self.height));
 
         // Add new block to stash by replacing a dummy block
         // Do this locally without interacting with the server
-        self.stash.write_to_stash(new_identifier, new_position, new_value)?;
+        self.stash.write_to_stash(identifier, position, value)?;
 
         // Bookkeeping of OSAM stats
         self.update_stash_stats();

@@ -216,15 +216,15 @@ impl<V: OsamBlock> ObliviousStash<V> {
 
     pub fn write_to_stash(
         &mut self,
-        new_identifier: Identifier,
-        new_position: TreeIndex,
-        new_value: V,
+        identifier: Identifier,
+        position: TreeIndex,
+        value: V,
     ) -> Result<(), OsamError> {
         // Create block with new values
         let new_block = PathOsamBlock {
-            value: new_value,
-            identifier: new_identifier,
-            position: new_position,
+            value: value,
+            identifier: identifier,
+            position: position,
         };
 
         // Overwrite the first dummy block

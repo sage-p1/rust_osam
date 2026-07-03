@@ -5,72 +5,87 @@
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 // of this source tree. You may select, at your option, one of the above-listed licenses.
 
-//! A simple interactive demonstration of ORAM.
+//! A simple interactive demonstration of OSAM.
 
-// use oram::{DefaultOram, Oram};
-// use rand::rngs::OsRng;
-// use rustyline::history::FileHistory;
-// use rustyline::Editor;
+use osam::{Osam, PathOsam};
+use osam::path_osam::{DEFAULT_BLOCKS_PER_BUCKET, DEFAULT_STASH_OVERFLOW_SIZE};
+use rand::rngs::OsRng;
+use rustyline::history::FileHistory;
+use rustyline::Editor;
 
-// fn parse_u64(
-//     prompt: &str,
-//     rl: &mut Editor<(), FileHistory>,
-// ) -> Result<u64, Box<dyn std::error::Error>> {
-//     Ok(loop {
-//         println!("{}", prompt);
-//         println!();
-//         let readline: String = rl.readline("> ")?;
-//         let number_parse = readline.parse::<u64>();
-//         match number_parse {
-//             Ok(number) => break number,
-//             Err(_) => {
-//                 println!("Expected a u64. Try again.");
-//                 continue;
-//             }
-//         }
-//     })
-// }
+fn parse_u64(
+    prompt: &str,
+    rl: &mut Editor<(), FileHistory>,
+) -> Result<u64, Box<dyn std::error::Error>> {
+    Ok(loop {
+        println!("{}", prompt);
+        println!();
+        let readline: String = rl.readline("> ")?;
+        let number_parse = readline.parse::<u64>();
+        match number_parse {
+            Ok(number) => break number,
+            Err(_) => {
+                println!("Expected a u64. Try again.");
+                continue;
+            }
+        }
+    })
+}
 
-// fn main() -> Result<(), Box<dyn std::error::Error>> {
-//     let mut rng = OsRng;
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut rng = OsRng;
 
-//     let mut rl = Editor::<(), _>::new().unwrap();
+    let mut rl = Editor::<(), _>::new().unwrap();
 
-//     println!("In this example, we initialize and interact with an oblivious RAM storing u64s.");
-//     println!("How many u64s would you like the ORAM to store?");
+    println!("In this example, we initialize and interact with an oblivious RAM storing u64s.");
+    println!("How many u64 blocks would you like the OSAM to support?");
 
-//     let capacity = parse_u64("Enter a power of two:", &mut rl)?;
+    let capacity = parse_u64("Enter a power of two:", &mut rl)?;
 
-//     // Initialize a Path ORAM storing `capacity` u64s.
-//     let mut oram = DefaultOram::<u64>::new(capacity, &mut rng)?;
+    // Initialize a Path OSAM storing `capacity` u64s.
+    let mut osam = PathOsam::<
+        u64, 
+        DEFAULT_BLOCKS_PER_BUCKET
+        >::new_with_parameters(capacity, DEFAULT_STASH_OVERFLOW_SIZE)?;
 
-//     loop {
-//         let action = loop {
-//             println!("Enter an option (r or w):");
-//             println!("r) Read");
-//             println!("w) Write");
-//             let action: String = rl.readline("> ")?;
-//             if (action != "r") & (action != "w") {
-//                 println!("Try again.");
-//                 continue;
-//             }
-//             break action;
-//         };
+    loop {
+        let action = loop {
+            println!("\nEnter an option (a, r, w, or q):");
+            println!("a) Alloc");
+            println!("w) Write");
+            println!("r) Read");
+            println!("q) Quit");
+            let action: String = rl.readline("\n> ")?;
+            if (action != "a") & (action != "w") & (action != "r") & (action != "q") {
+                println!("Try again.");
+                continue;
+            }
+            break action;
+        };
 
-//         let address = parse_u64("What address?", &mut rl)?;
+        if action == "q" {
+            println!("Quitting program...");
+            break;
+        } else if action == "a" {
+            let address = osam.alloc(&mut rng)?;
+            println!("The allocated address is (identifier: {}, position: {})", address.0, address.1);
+        } else {
+            let identifier = parse_u64("\nEnter identifier: ", &mut rl)?;
+            let position = parse_u64("\nEnter position: ", &mut rl)?;
 
-//         if action == "r" {
-//             println!("Value at {} is {}.", address, oram.read(address, &mut rng)?);
-//         }
+            if action == "w" {
+                let value = parse_u64("\nEnter value: ", &mut rl)?;
+                let _ = osam.write(identifier, position, value, &mut rng)?;
+                println!("\nWrote value {} to address (identifier: {}, position: {}).", value, identifier, position);
+            } else {
+                let value = osam.read(identifier, position)?;
+                match value {
+                    Some(v) => println!("\nValue at address (identifier: {}, position: {}) is {}", identifier, position, v),
+                    None => println!("\nCould not find a value at address (identifier: {}, position: {})", identifier, position),
+                }
+            }
+        }
+    }
 
-//         if action == "w" {
-//             let value = parse_u64("Value to write?", &mut rl)?;
-//             oram.write(address, value, &mut rng)?;
-//             println!("Wrote value {} to address {}.", value, address);
-//         }
-//     }
-// }
-
-fn main() {
-    println!("Interactive");
+    Ok(())
 }
