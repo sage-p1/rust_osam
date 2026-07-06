@@ -1,4 +1,4 @@
-## oram ![Build Status](https://github.com/facebook/oram/workflows/CI/badge.svg)
+## osam
 
 This library implements an Oblivious SAM (OSAM) derived from [Facebook's ORAM implementation](https://github.com/facebook/oram).
 
