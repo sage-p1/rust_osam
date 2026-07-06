@@ -5,126 +5,197 @@
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 // of this source tree. You may select, at your option, one of the above-listed licenses.
 
-//! This module contains benchmarks for the `oram` crate.
+//! This module contains benchmarks for the `osam` crate.
 
 extern crate criterion;
 use core::fmt;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use oram::DefaultOram;
-use rand::CryptoRng;
-use rand::RngCore;
+use osam::{BlockSize, BlockValue, BucketSize, Identifier, PathOsam, TreeIndex};
+use osam::path_osam::DEFAULT_STASH_OVERFLOW_SIZE;
 use std::mem;
 use std::time::Duration;
 
-use oram::BlockSize;
-use oram::BlockValue;
-use oram::{Address, Oram};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
-const CAPACITIES_TO_BENCHMARK: [Address; 3] = [1 << 14, 1 << 16, 1 << 20];
+const CAPACITIES_TO_BENCHMARK: [Identifier; 3] = [1 << 14, 1 << 16, 1 << 20];
 
-trait Benchmarkable {
-    fn short_name() -> String;
-    fn new<R: CryptoRng + RngCore>(capacity: Address, rng: &mut R) -> Self;
-}
-
-impl<const B: BlockSize> Benchmarkable for DefaultOram<BlockValue<B>> {
-    fn short_name() -> String {
-        "DefaultOram".into()
-    }
-
-    fn new<R: CryptoRng + RngCore>(capacity: Address, rng: &mut R) -> Self {
-        Self::new(capacity, rng).unwrap()
-    }
-}
-
-// Here, all benchmarks are run for linear and path ORAMs, and block sizes of 64 and 4096.
+// Here, all benchmarks are run for linear and path OSAMs, and block sizes of 64 and 4096.
 criterion_group!(
     name = benches;
     config = Criterion::default().warm_up_time(Duration::new(0, 1_000_000_00)).measurement_time(Duration::new(0, 1_000_000_00)).sample_size(10);
     targets =
-    benchmark_read::<DefaultOram<BlockValue<4096>>>,
-    benchmark_write::<DefaultOram<BlockValue<4096>>>,
-    benchmark_initialization::<DefaultOram<BlockValue<4096>>>,
-    benchmark_random_operations::<4096, DefaultOram<BlockValue<4096>>>,
-    benchmark_read::<DefaultOram<BlockValue<64>>>,
-    benchmark_write::<DefaultOram<BlockValue<64>>>,
-    benchmark_initialization::<DefaultOram<BlockValue<64>>>,
-    benchmark_random_operations::<64, DefaultOram<BlockValue<64>>>,
+    benchmark_initialization::<4096, 4>,
+    benchmark_alloc::<4096, 4>,
+    benchmark_alloc_and_read::<4096, 4>,
+    benchmark_read::<4096, 4>,
+    benchmark_alloc_and_write::<4096, 4>,
+    benchmark_write::<4096, 4>,
+    benchmark_alloc_and_local_write::<4096, 4>,
+    benchmark_local_write::<4096, 4>,
+    benchmark_random_operations::<4096, 4>,
+    benchmark_initialization::<64, 4>,
+    benchmark_alloc::<64, 4>,
+    benchmark_alloc_and_read::<64, 4>,
+    benchmark_read::<64, 4>,
+    benchmark_alloc_and_write::<64, 4>,
+    benchmark_write::<64, 4>,
+    benchmark_alloc_and_local_write::<64, 4>,
+    benchmark_local_write::<64, 4>,
+    benchmark_random_operations::<64, 4>,
 );
 
 criterion_main!(benches);
 
-fn benchmark_initialization<T: Oram + Benchmarkable>(c: &mut Criterion) {
-    let mut group = c.benchmark_group(T::short_name() + "::initialization");
-    let mut rng = StdRng::seed_from_u64(0);
+fn benchmark_initialization<const B: BlockSize, const Z: BucketSize>(c: &mut Criterion) {
+    let mut group = c.benchmark_group(String::from("PathOsam") + "::initialization");
     for capacity in CAPACITIES_TO_BENCHMARK.iter() {
         group.bench_with_input(
             BenchmarkId::from_parameter(ReadWriteParameters {
                 capacity: *capacity,
-                block_size: mem::size_of::<T::V>(),
+                block_size: mem::size_of::<BlockValue<B>>(),
             }),
             capacity,
-            |b, capacity| b.iter(|| T::new(*capacity, &mut rng)),
+            |b, capacity| b.iter(|| PathOsam::<BlockValue<B>, Z>::new_with_parameters(*capacity, DEFAULT_STASH_OVERFLOW_SIZE)),
         );
     }
 }
 
-fn benchmark_read<T: Oram + Benchmarkable>(c: &mut Criterion) {
-    let mut group = c.benchmark_group(T::short_name() + "::read");
+fn benchmark_alloc<const B: BlockSize, const Z: BucketSize>(c: &mut Criterion) {
+    let mut group = c.benchmark_group(String::from("PathOsam") + "::alloc");
     let mut rng = StdRng::seed_from_u64(0);
     for capacity in CAPACITIES_TO_BENCHMARK.iter() {
-        let mut oram = T::new(*capacity, &mut rng);
+        let mut osam = PathOsam::<BlockValue<B>, Z>::new_with_parameters(*capacity, DEFAULT_STASH_OVERFLOW_SIZE).unwrap();
         group.bench_function(
             BenchmarkId::from_parameter(ReadWriteParameters {
                 capacity: *capacity,
-                block_size: mem::size_of::<T::V>(),
+                block_size: mem::size_of::<BlockValue<B>>(),
             }),
-            |b| b.iter(|| oram.read(0, &mut rng)),
+            |b| b.iter(|| osam.alloc(&mut rng)),
         );
     }
 }
 
-fn benchmark_write<T: Oram + Benchmarkable>(c: &mut Criterion) {
-    let mut group = c.benchmark_group(T::short_name() + "::write");
+fn benchmark_alloc_and_read<const B: BlockSize, const Z: BucketSize>(c: &mut Criterion) {
+    let mut group = c.benchmark_group(String::from("PathOsam") + "::read");
     let mut rng = StdRng::seed_from_u64(0);
     for capacity in CAPACITIES_TO_BENCHMARK.iter() {
-        let mut oram = T::new(*capacity, &mut rng);
+        let mut osam = PathOsam::<BlockValue<B>, Z>::new_with_parameters(*capacity, DEFAULT_STASH_OVERFLOW_SIZE).unwrap();
         group.bench_function(
             BenchmarkId::from_parameter(ReadWriteParameters {
                 capacity: *capacity,
-                block_size: mem::size_of::<T::V>(),
+                block_size: mem::size_of::<BlockValue<B>>(),
             }),
-            |b| b.iter(|| oram.write(0, T::V::default(), &mut rng)),
+            |b| { 
+                let address = osam.alloc(&mut rng).unwrap();
+                b.iter(|| osam.read(address.0, address.1));
+            },
         );
     }
 }
 
-fn benchmark_random_operations<const B: BlockSize, T: Oram<V = BlockValue<B>> + Benchmarkable>(
+fn benchmark_read<const B: BlockSize, const Z: BucketSize>(c: &mut Criterion) {
+    let mut group = c.benchmark_group(String::from("PathOsam") + "::read");
+    for capacity in CAPACITIES_TO_BENCHMARK.iter() {
+        let mut osam = PathOsam::<BlockValue<B>, Z>::new_with_parameters(*capacity, DEFAULT_STASH_OVERFLOW_SIZE).unwrap();
+        group.bench_function(
+            BenchmarkId::from_parameter(ReadWriteParameters {
+                capacity: *capacity,
+                block_size: mem::size_of::<BlockValue<B>>(),
+            }),
+            |b| b.iter(|| osam.read(1, *capacity - 1)),
+        );
+    }
+}
+
+fn benchmark_alloc_and_write<const B: BlockSize, const Z: BucketSize>(c: &mut Criterion) {
+    let mut group = c.benchmark_group(String::from("PathOsam") + "::write");
+    let mut rng = StdRng::seed_from_u64(0);
+    for capacity in CAPACITIES_TO_BENCHMARK.iter() {
+        let mut osam = PathOsam::<BlockValue<B>, Z>::new_with_parameters(*capacity, DEFAULT_STASH_OVERFLOW_SIZE).unwrap();
+        group.bench_function(
+            BenchmarkId::from_parameter(ReadWriteParameters {
+                capacity: *capacity,
+                block_size: mem::size_of::<BlockValue<B>>(),
+            }),
+            |b| {
+                let address = osam.alloc(&mut rng).unwrap();
+                b.iter(|| osam.write(address.0, address.1, BlockValue::<B>::default(), &mut rng));
+            },
+        );
+    }
+}
+
+fn benchmark_write<const B: BlockSize, const Z: BucketSize>(c: &mut Criterion) {
+    let mut group = c.benchmark_group(String::from("PathOsam") + "::write");
+    let mut rng = StdRng::seed_from_u64(0);
+    for capacity in CAPACITIES_TO_BENCHMARK.iter() {
+        let mut osam = PathOsam::<BlockValue<B>, Z>::new_with_parameters(*capacity, DEFAULT_STASH_OVERFLOW_SIZE).unwrap();
+        group.bench_function(
+            BenchmarkId::from_parameter(ReadWriteParameters {
+                capacity: *capacity,
+                block_size: mem::size_of::<BlockValue<B>>(),
+            }),
+            |b| b.iter(|| osam.write(1, *capacity - 1, BlockValue::<B>::default(), &mut rng)),
+        );
+    }
+}
+
+fn benchmark_alloc_and_local_write<const B: BlockSize, const Z: BucketSize>(c: &mut Criterion) {
+    let mut group = c.benchmark_group(String::from("PathOsam") + "::local_write");
+    let mut rng = StdRng::seed_from_u64(0);
+    for capacity in CAPACITIES_TO_BENCHMARK.iter() {
+        let mut osam = PathOsam::<BlockValue<B>, Z>::new_with_parameters(*capacity, DEFAULT_STASH_OVERFLOW_SIZE).unwrap();
+        group.bench_function(
+            BenchmarkId::from_parameter(ReadWriteParameters {
+                capacity: *capacity,
+                block_size: mem::size_of::<BlockValue<B>>(),
+            }),
+            |b| {
+                let address = osam.alloc(&mut rng).unwrap();
+                b.iter(|| osam.local_write(address.0, address.1, BlockValue::<B>::default()));
+            },
+        );
+    }
+}
+
+fn benchmark_local_write<const B: BlockSize, const Z: BucketSize>(c: &mut Criterion) {
+    let mut group = c.benchmark_group(String::from("PathOsam") + "::local_write");
+    for capacity in CAPACITIES_TO_BENCHMARK.iter() {
+        let mut osam = PathOsam::<BlockValue<B>, Z>::new_with_parameters(*capacity, DEFAULT_STASH_OVERFLOW_SIZE).unwrap();
+        group.bench_function(
+            BenchmarkId::from_parameter(ReadWriteParameters {
+                capacity: *capacity,
+                block_size: mem::size_of::<BlockValue<B>>(),
+            }),
+            |b| b.iter(|| osam.local_write(1, *capacity - 1, BlockValue::<B>::default())),
+        );
+    }
+}
+
+fn benchmark_random_operations<const B: BlockSize, const Z: BucketSize>(
     c: &mut Criterion,
 ) {
-    let mut group = c.benchmark_group(T::short_name() + "::random_operations");
+    let mut group = c.benchmark_group(String::from("PathOsam") + "::random_operations");
     let mut rng = StdRng::seed_from_u64(0);
 
     for capacity in CAPACITIES_TO_BENCHMARK {
-        let mut oram = T::new(capacity, &mut rng);
+        let mut osam = PathOsam::<BlockValue<B>, Z>::new_with_parameters(capacity, DEFAULT_STASH_OVERFLOW_SIZE).unwrap();
 
         let number_of_operations_to_run = 64 as usize;
 
         let block_size = B;
-        let capacity = oram.block_capacity().unwrap();
         let parameters = &RandomOperationsParameters {
             capacity,
             block_size,
             number_of_operations_to_run,
         };
 
-        let mut index_randomness = vec![0u64; number_of_operations_to_run];
+        let mut addresses: Vec<(Identifier, TreeIndex)> = vec![(Identifier::MAX, 0); number_of_operations_to_run];
         let mut read_versus_write_randomness = vec![false; number_of_operations_to_run];
         let capacity_usize: usize = capacity.try_into().unwrap();
         let mut value_randomness = vec![0u8; block_size * capacity_usize];
         for i in 0..number_of_operations_to_run {
-            index_randomness[i] = rng.gen_range(0..capacity);
+            addresses[i] = osam.alloc(&mut rng).unwrap();
         }
 
         rng.fill(&mut read_versus_write_randomness[..]);
@@ -135,10 +206,10 @@ fn benchmark_random_operations<const B: BlockSize, T: Oram<V = BlockValue<B>> + 
             parameters,
             |b, &parameters| {
                 b.iter(|| {
-                    run_many_random_accesses::<B, T>(
-                        &mut oram,
+                    run_many_random_accesses::<B, Z>(
+                        &mut osam,
                         parameters.number_of_operations_to_run,
-                        black_box(&index_randomness),
+                        black_box(&addresses),
                         black_box(&read_versus_write_randomness),
                         black_box(&value_randomness),
                     )
@@ -149,38 +220,43 @@ fn benchmark_random_operations<const B: BlockSize, T: Oram<V = BlockValue<B>> + 
     group.finish();
 }
 
-fn run_many_random_accesses<const B: BlockSize, T: Oram<V = BlockValue<B>>>(
-    oram: &mut T,
+fn run_many_random_accesses<const B: BlockSize, const Z: BucketSize>(
+    osam: &mut PathOsam<BlockValue<B>, Z>,
     number_of_operations_to_run: usize,
-    index_randomness: &[Address],
+    addresses: &[(Identifier, TreeIndex)],
     read_versus_write_randomness: &[bool],
     value_randomness: &[u8],
-) -> BlockValue<B> {
+){
     let mut rng = StdRng::seed_from_u64(0);
     for operation_number in 0..number_of_operations_to_run {
-        let random_index = index_randomness[operation_number];
+        let address = addresses[operation_number];
+        let identifier = address.0;
+        let position = address.1;
         let random_read_versus_write: bool = read_versus_write_randomness[operation_number];
 
         if random_read_versus_write {
-            oram.read(random_index, &mut rng).unwrap();
+            osam.read(identifier, position).unwrap();
         } else {
             let block_size = B;
-            let random_index_usize: usize = random_index.try_into().unwrap();
-            let start_index = block_size * random_index_usize;
-            let end_index = block_size * random_index_usize;
+            let start_index = block_size * operation_number;
+            let end_index = block_size + start_index;
             let random_bytes: [u8; B] =
                 value_randomness[start_index..end_index].try_into().unwrap();
-            oram.write(random_index, BlockValue::new(random_bytes), &mut rng)
+            let random_eviction = rng.gen_bool(0.5);
+            if random_eviction {
+            osam.write(identifier, position, BlockValue::new(random_bytes), &mut rng)
                 .unwrap();
+            } else {
+            osam.local_write(identifier, position, BlockValue::new(random_bytes))
+                .unwrap();
+            }
         }
     }
-
-    BlockValue::default()
 }
 
 #[derive(Clone, Copy)]
 struct ReadWriteParameters {
-    capacity: Address,
+    capacity: Identifier,
     block_size: usize,
 }
 
@@ -196,7 +272,7 @@ impl fmt::Display for ReadWriteParameters {
 
 #[derive(Clone, Copy)]
 struct RandomOperationsParameters {
-    capacity: Address,
+    capacity: Identifier,
     block_size: usize,
     number_of_operations_to_run: usize,
 }
