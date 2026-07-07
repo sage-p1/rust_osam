@@ -9,8 +9,8 @@
 
 extern crate osam;
 
-use osam::{BlockSize, BlockValue, Identifier, OsamError, PathOsam, TreeIndex};
 use osam::path_osam::{DEFAULT_BLOCKS_PER_BUCKET, DEFAULT_STASH_OVERFLOW_SIZE};
+use osam::{BlockSize, BlockValue, Identifier, OsamError, PathOsam, TreeIndex};
 use rand::{rngs::OsRng, Rng};
 
 const BLOCK_SIZE: BlockSize = 4096;
@@ -21,13 +21,12 @@ const DATABASE: [[u8; BLOCK_SIZE as usize]; DB_SIZE as usize] =
 
 fn main() -> Result<(), OsamError> {
     let mut rng = OsRng;
-    let mut osam = PathOsam::<
-        BlockValue<BLOCK_SIZE>, 
-        DEFAULT_BLOCKS_PER_BUCKET,
-        >::new_with_parameters(DB_SIZE, DEFAULT_STASH_OVERFLOW_SIZE)?;
+    let mut osam = PathOsam::<BlockValue<BLOCK_SIZE>, DEFAULT_BLOCKS_PER_BUCKET>::new_with_parameters(
+        DB_SIZE, 
+        DEFAULT_STASH_OVERFLOW_SIZE,
+    )?;
 
-    let mut addresses: [(Identifier, TreeIndex); DB_SIZE as usize] = 
-        [(Identifier::MAX, 0); DB_SIZE as usize];
+    let mut addresses: [(Identifier, TreeIndex); DB_SIZE as usize] = [(Identifier::MAX, 0); DB_SIZE as usize];
 
     // Read DATABASE into osam.
     for (i, bytes) in DATABASE.iter().enumerate() {

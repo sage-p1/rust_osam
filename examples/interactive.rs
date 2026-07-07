@@ -7,8 +7,8 @@
 
 //! A simple interactive demonstration of OSAM.
 
-use osam::PathOsam;
 use osam::path_osam::{DEFAULT_BLOCKS_PER_BUCKET, DEFAULT_STASH_OVERFLOW_SIZE};
+use osam::PathOsam;
 use rand::rngs::OsRng;
 use rustyline::history::FileHistory;
 use rustyline::Editor;
@@ -43,10 +43,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let capacity = parse_u64("\nEnter a power of two:", &mut rl)?;
 
     // Initialize a Path OSAM storing `capacity` u64s.
-    let mut osam = PathOsam::<
-        u64, 
-        DEFAULT_BLOCKS_PER_BUCKET
-        >::new_with_parameters(capacity, DEFAULT_STASH_OVERFLOW_SIZE)?;
+    let mut osam = PathOsam::<u64, DEFAULT_BLOCKS_PER_BUCKET>::new_with_parameters(
+        capacity, 
+        DEFAULT_STASH_OVERFLOW_SIZE,
+    )?;
 
     loop {
         let action = loop {
@@ -68,7 +68,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             break;
         } else if action == "a" {
             let address = osam.alloc(&mut rng)?;
-            println!("\nThe allocated address is (identifier: {}, position: {})", address.0, address.1);
+            println!(
+                "\nThe allocated address is (identifier: {}, position: {})", 
+                address.0, address.1
+            );
         } else {
             let identifier = parse_u64("\nEnter identifier: ", &mut rl)?;
             let position = parse_u64("\nEnter position: ", &mut rl)?;
@@ -76,12 +79,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if action == "w" {
                 let value = parse_u64("\nEnter value: ", &mut rl)?;
                 let _ = osam.write(identifier, position, value, &mut rng)?;
-                println!("\nWrote value {} to address (identifier: {}, position: {}).", value, identifier, position);
+                println!(
+                    "\nWrote value {} to address (identifier: {}, position: {}).", 
+                    value, identifier, position
+                );
             } else {
                 let value = osam.read(identifier, position)?;
                 match value {
-                    Some(v) => println!("\nValue at address (identifier: {}, position: {}) is {}", identifier, position, v),
-                    None => println!("\nCould not find a value at address (identifier: {}, position: {})", identifier, position),
+                    Some(v) => println!(
+                        "\nValue at address (identifier: {}, position: {}) is {}", 
+                        identifier, position, v
+                    ),
+                    None => println!(
+                        "\nCould not find a value at address (identifier: {}, position: {})", 
+                        identifier, position
+                    ),
                 }
             }
         }

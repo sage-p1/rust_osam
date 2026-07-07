@@ -77,7 +77,7 @@ pub struct PathOsam<V: OsamBlock, const Z: BucketSize> {
     read_counter: CounterSize,
     /// The counter tracking the number of round-trips, which is a defined as one
     /// instance of reading a path and then writing a path. This should equal
-    /// write_counter + read_counter
+    /// `write_counter` + `read_counter`
     round_trip_counter: CounterSize,
 }
 
@@ -161,7 +161,7 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
         self.physical_memory.len()
     }
 
-    /// Allocates a valid Identifier and TreeIndex to be used for reading and writing
+    /// Allocates a valid `Identifier` and `TreeIndex` to be used for reading and writing
     pub fn alloc<R: Rng + CryptoRng>(
         &mut self,
         rng: &mut R,
@@ -264,7 +264,7 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
         let num_leaves = 2u64.pow(height);
         evict_position %= num_leaves; // Map to bucket indices
         evict_position = evict_position.swap_bits(); // Bit reversal
-        evict_position = evict_position.checked_shr(64 - height).unwrap_or_else(|| 0); // Move bits over to leaf indices
+        evict_position = evict_position.checked_shr(64 - height).unwrap_or(0); // Move bits over to leaf indices
         evict_position += num_leaves; // Add bucket offset
         self.evict_counter += 1;
         Ok(evict_position)

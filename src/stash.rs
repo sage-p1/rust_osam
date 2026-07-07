@@ -222,9 +222,9 @@ impl<V: OsamBlock> ObliviousStash<V> {
     ) -> Result<(), OsamError> {
         // Create block with new values
         let new_block = PathOsamBlock {
-            value: value,
-            identifier: identifier,
-            position: position,
+            value,
+            identifier,
+            position,
         };
 
         // Overwrite the first dummy block
@@ -324,7 +324,7 @@ impl<V: OsamBlock> ObliviousStash<V> {
 
             let block_is_dummy = block.ct_is_dummy();
             let block_exists = occupied_spaces.ct_ne(&0);
-            let count_decremented = (*occupied_spaces).checked_sub(1).unwrap_or_else(|| 0);
+            let count_decremented = (*occupied_spaces).saturating_sub(1);
             let should_assign = block_is_dummy & block_exists;
             occupied_spaces.conditional_assign(&count_decremented, should_assign);
             identifier.conditional_assign(&0, should_assign);
@@ -335,6 +335,7 @@ impl<V: OsamBlock> ObliviousStash<V> {
         // begin where the dummy blocks begin in physical memory (no overlapping)
         bitonic_sort_by_keys(&mut temp_bucket, &mut identifiers);
 
+        #[allow(clippy::needless_range_loop)]
         for i in 0..Z { 
             self.blocks[level * Z + i] = temp_bucket[i];
         }
