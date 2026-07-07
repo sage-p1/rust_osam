@@ -50,7 +50,7 @@ impl<V: OsamBlock> ObliviousStash<V> {
         let mut level_real_blocks_to_add_counts = vec![0; usize::try_from(height)? + 1]; // Ensures each bucket has exactly Z blocks
         let mut level_existing_block_counts = vec![0; usize::try_from(height)? + 1]; // Tracks block count of each bucket in the path to write
 
-        // Scan over physical memory to determine capacities, as buckets may already contain real blocks 
+        // Scan over physical memory to determine capacities, as buckets may already contain real blocks
         for depth in 0..=height {
             let bucket =
                 &physical_memory[usize::try_from(position.ct_node_on_path(depth, height))?];
@@ -81,7 +81,8 @@ impl<V: OsamBlock> ObliviousStash<V> {
             // Obliviously scan through the buckets from leaf to root,
             // assigning the block to the first empty bucket satisfying the invariant.
             for (level, count) in level_real_blocks_to_add_counts.iter_mut().enumerate().rev() {
-                let level_bucket_full: Choice = count.ct_eq(&(u64::try_from(Z)? - level_existing_block_counts[level]));
+                let level_bucket_full: Choice =
+                    count.ct_eq(&(u64::try_from(Z)? - level_existing_block_counts[level]));
 
                 let level_u64 = u64::try_from(level)?;
                 let level_satisfies_invariant = block_position
@@ -181,7 +182,7 @@ impl<V: OsamBlock> ObliviousStash<V> {
             for slot_number in 0..Z {
                 let stash_index = (usize::try_from(depth)?) * Z + slot_number;
 
-                // Either write real block from stash to bucket, or preserve preexisting real block 
+                // Either write real block from stash to bucket, or preserve preexisting real block
                 let mut block = bucket_to_write.blocks[slot_number];
                 let block_is_dummy = self.blocks[stash_index].ct_is_dummy();
                 block.conditional_assign(&self.blocks[stash_index], !block_is_dummy);
@@ -231,13 +232,9 @@ impl<V: OsamBlock> ObliviousStash<V> {
         let mut assigned = Choice::from(0);
         let read_from_path_indices: usize = usize::try_from(self.path_size)?;
 
-        // Skip the first `path_size` indices in the stash, since these are 
+        // Skip the first `path_size` indices in the stash, since these are
         // overwritten upon calling read_from_path
-        for block in self
-            .blocks
-            .iter_mut()
-            .skip(read_from_path_indices) 
-        {
+        for block in self.blocks.iter_mut().skip(read_from_path_indices) {
             let block_is_dummy = block.ct_is_dummy();
             let should_assign = block_is_dummy & (!assigned);
             assigned |= should_assign;
@@ -257,15 +254,12 @@ impl<V: OsamBlock> ObliviousStash<V> {
                 "Stash overflow occurred. Stash resized to {} blocks.",
                 self.blocks.len()
             );
-        }       
+        }
 
         Ok(())
     }
 
-    pub fn read_from_stash(
-        &mut self,
-        identifier: Identifier,
-    ) -> Result<Option<V>, OsamError> {
+    pub fn read_from_stash(&mut self, identifier: Identifier) -> Result<Option<V>, OsamError> {
         let mut result: V = V::default();
         let mut found: Choice = 0.into();
 
@@ -277,8 +271,7 @@ impl<V: OsamBlock> ObliviousStash<V> {
             // Read current value of target block into `result`.
             result.conditional_assign(&block.value, is_requested_index);
             // Write new position into target block.
-            block
-                .conditional_assign(&PathOsamBlock::<V>::dummy(), is_requested_index);
+            block.conditional_assign(&PathOsamBlock::<V>::dummy(), is_requested_index);
         }
 
         let mut output: Option<V> = None;
@@ -301,22 +294,21 @@ impl<V: OsamBlock> ObliviousStash<V> {
     }
 
     fn sort_bucket_indices<const Z: BucketSize>(
-        &mut self, 
+        &mut self,
         level: usize,
         occupied_spaces: &mut u64,
     ) {
         let mut temp_bucket = vec![PathOsamBlock::<V>::dummy(); Z];
         let mut identifiers = vec![TreeIndex::MAX; Z];
-        
         // Create a vector copy of the current bucket and a vector of block identifiers.
         // To ensure preexisting blocks in the write path are not overwritten, we fill
         // buckets with real blocks in ascending order / left-to-right by modifying the
         // identifiers of `occupied_spaces` dummy blocks to be 0, a reserved identifier not
         // given by alloc. When we sort by identifier, per bucket, the first `occupied_spaces`
-        // in the stash are dummy blocks and do not overlap with preexisting real blocks in 
-        // physical memory. After, any remaining blocks in that bucket are dummy and can be  
-        // safely overwritten. 
-        for i in 0..Z { 
+        // in the stash are dummy blocks and do not overlap with preexisting real blocks in
+        // physical memory. After, any remaining blocks in that bucket are dummy and can be
+        // safely overwritten.
+        for i in 0..Z {
             let block = self.blocks[level * Z + i];
             self.blocks[level * Z + i] = PathOsamBlock::<V>::dummy();
             temp_bucket[i] = block;
@@ -336,7 +328,7 @@ impl<V: OsamBlock> ObliviousStash<V> {
         bitonic_sort_by_keys(&mut temp_bucket, &mut identifiers);
 
         #[allow(clippy::needless_range_loop)]
-        for i in 0..Z { 
+        for i in 0..Z {
             self.blocks[level * Z + i] = temp_bucket[i];
         }
     }

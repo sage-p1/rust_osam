@@ -212,7 +212,11 @@ fn benchmark_random_operations<const B: BlockSize, const Z: BucketSize>(c: &mut 
     let mut rng = StdRng::seed_from_u64(0);
 
     for capacity in CAPACITIES_TO_BENCHMARK {
-        let mut osam = PathOsam::<BlockValue<B>, Z>::new_with_parameters(capacity, DEFAULT_STASH_OVERFLOW_SIZE).unwrap();
+        let mut osam = PathOsam::<BlockValue<B>, Z>::new_with_parameters(
+            capacity,
+            DEFAULT_STASH_OVERFLOW_SIZE,
+        )
+        .unwrap();
 
         let number_of_operations_to_run = 64 as usize;
 
@@ -223,7 +227,8 @@ fn benchmark_random_operations<const B: BlockSize, const Z: BucketSize>(c: &mut 
             number_of_operations_to_run,
         };
 
-        let mut addresses: Vec<(Identifier, TreeIndex)> = vec![(Identifier::MAX, 0); number_of_operations_to_run];
+        let mut addresses: Vec<(Identifier, TreeIndex)> =
+            vec![(Identifier::MAX, 0); number_of_operations_to_run];
         let mut read_versus_write_randomness = vec![false; number_of_operations_to_run];
         let capacity_usize: usize = capacity.try_into().unwrap();
         let mut value_randomness = vec![0u8; block_size * capacity_usize];
@@ -259,7 +264,7 @@ fn run_many_random_accesses<const B: BlockSize, const Z: BucketSize>(
     addresses: &[(Identifier, TreeIndex)],
     read_versus_write_randomness: &[bool],
     value_randomness: &[u8],
-){
+) {
     let mut rng = StdRng::seed_from_u64(0);
     for operation_number in 0..number_of_operations_to_run {
         let address = addresses[operation_number];
@@ -277,11 +282,16 @@ fn run_many_random_accesses<const B: BlockSize, const Z: BucketSize>(
                 value_randomness[start_index..end_index].try_into().unwrap();
             let random_eviction = rng.gen_bool(0.5);
             if random_eviction {
-            osam.write(identifier, position, BlockValue::new(random_bytes), &mut rng)
+                osam.write(
+                    identifier,
+                    position,
+                    BlockValue::new(random_bytes),
+                    &mut rng,
+                )
                 .unwrap();
             } else {
-            osam.local_write(identifier, position, BlockValue::new(random_bytes))
-                .unwrap();
+                osam.local_write(identifier, position, BlockValue::new(random_bytes))
+                    .unwrap();
             }
         }
     }

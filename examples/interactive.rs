@@ -44,7 +44,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize a Path OSAM storing `capacity` u64s.
     let mut osam = PathOsam::<u64, DEFAULT_BLOCKS_PER_BUCKET>::new_with_parameters(
-        capacity, 
+        capacity,
         DEFAULT_STASH_OVERFLOW_SIZE,
     )?;
 
@@ -69,7 +69,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } else if action == "a" {
             let address = osam.alloc(&mut rng)?;
             println!(
-                "\nThe allocated address is (identifier: {}, position: {})", 
+                "\nThe allocated address is (identifier: {}, position: {})",
                 address.0, address.1
             );
         } else {
@@ -80,18 +80,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let value = parse_u64("\nEnter value: ", &mut rl)?;
                 let _ = osam.write(identifier, position, value, &mut rng)?;
                 println!(
-                    "\nWrote value {} to address (identifier: {}, position: {}).", 
+                    "\nWrote value {} to address (identifier: {}, position: {}).",
                     value, identifier, position
                 );
             } else {
                 let value = osam.read(identifier, position)?;
                 match value {
                     Some(v) => println!(
-                        "\nValue at address (identifier: {}, position: {}) is {}", 
+                        "\nValue at address (identifier: {}, position: {}) is {}",
                         identifier, position, v
                     ),
                     None => println!(
-                        "\nCould not find a value at address (identifier: {}, position: {})", 
+                        "\nCould not find a value at address (identifier: {}, position: {})",
                         identifier, position
                     ),
                 }

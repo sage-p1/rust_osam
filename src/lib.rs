@@ -42,7 +42,7 @@
 //!
 //! // Initialize an OSAM to store 64 blocks of 64 bytes each.
 //! let mut osam = PathOsam::<
-//!     BlockValue<BLOCK_SIZE>, 
+//!     BlockValue<BLOCK_SIZE>,
 //!     DEFAULT_BLOCKS_PER_BUCKET,
 //!     >::new_with_parameters(DB_SIZE, DEFAULT_STASH_OVERFLOW_SIZE)?;
 //!
@@ -63,7 +63,7 @@
 //!     let bytes = osam.read(identifier, position)?.unwrap();
 //!     assert_eq!(bytes, BlockValue::new(DATABASE[i]));
 //! }
-//! 
+//!
 //! # Ok::<(), OsamError>(())
 //! ```
 //!
@@ -91,7 +91,7 @@
 //! const INITIAL_STASH_OVERFLOW_SIZE: StashSize = DEFAULT_STASH_OVERFLOW_SIZE;
 //!
 //! let mut osam = PathOsam::<
-//!     BlockValue<BLOCK_SIZE>, 
+//!     BlockValue<BLOCK_SIZE>,
 //!     DEFAULT_BLOCKS_PER_BUCKET,
 //!     >::new_with_parameters(DB_SIZE, DEFAULT_STASH_OVERFLOW_SIZE)?;
 //! # Ok::<(), OsamError>(())

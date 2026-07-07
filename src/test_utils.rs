@@ -8,14 +8,12 @@
 //! This module contains common test utilities for crates generating tests utilizing the
 //! `osam` crate.
 
-use std::sync::Once;
-use std::ops::Div;
 use std::collections::HashMap;
+use std::ops::Div;
+use std::sync::Once;
 static INIT: Once = Once::new();
 use crate::path_osam::PathOsam;
-use crate::{
-    BucketSize, OsamBlock, StashSize
-};
+use crate::{BucketSize, OsamBlock, StashSize};
 use rand::{
     distributions::{Distribution, Standard},
     rngs::StdRng,
@@ -37,8 +35,8 @@ pub(crate) fn init_logger() {
 }
 
 pub(crate) fn stash_checker<V: OsamBlock, const Z: BucketSize>(
-    stash_size_experiment: bool, 
-    osam: &mut PathOsam<V, Z>
+    stash_size_experiment: bool,
+    osam: &mut PathOsam<V, Z>,
 ) {
     if stash_size_experiment {
         assert!(osam.stash_occupancy() < 10);
@@ -47,13 +45,12 @@ pub(crate) fn stash_checker<V: OsamBlock, const Z: BucketSize>(
 
 /// Tests the correctness of PathOsam on a sequence of all writes then reads
 pub(crate) fn write_then_read<V: OsamBlock, const Z: BucketSize>(
-    osam: &mut PathOsam<V, Z>, 
-    bucket_size: BucketSize, 
-    operation_factor: usize, 
+    osam: &mut PathOsam<V, Z>,
+    bucket_size: BucketSize,
+    operation_factor: usize,
     overflow_size: StashSize,
-    stash_size_experiment: bool
-)
-where
+    stash_size_experiment: bool,
+) where
     Standard: Distribution<V>,
 {
     init_logger();
@@ -101,21 +98,17 @@ where
         osam.write_counter(),
         StashSize::try_from(osam.alloc_counter()).unwrap()
     );
-    assert_eq!(
-        osam.write_counter(),
-        osam.read_counter()
-    );
+    assert_eq!(osam.write_counter(), osam.read_counter());
 }
 
 /// Tests the correctness of Path OSAM on a sequence of all reads then writes
 pub(crate) fn read_then_write<V: OsamBlock, const Z: BucketSize>(
-    osam: &mut PathOsam<V, Z>, 
-    bucket_size: BucketSize, 
-    operation_factor: usize, 
+    osam: &mut PathOsam<V, Z>,
+    bucket_size: BucketSize,
+    operation_factor: usize,
     overflow_size: StashSize,
-    stash_size_experiment: bool
-)
-where
+    stash_size_experiment: bool,
+) where
     Standard: Distribution<V>,
 {
     init_logger();
@@ -135,10 +128,7 @@ where
         let address = osam.alloc(&mut rng).unwrap();
         let identifier = address.0;
         let position = address.1;
-        assert_eq!(
-            osam.read(identifier, position).unwrap(),
-            None
-        );
+        assert_eq!(osam.read(identifier, position).unwrap(), None);
         stash_checker(stash_size_experiment, osam);
         let _ = osam.write(identifier, position, V::default(), &mut rng);
         stash_checker(stash_size_experiment, osam);
@@ -148,10 +138,7 @@ where
         osam.read_counter(),
         StashSize::try_from(osam.alloc_counter()).unwrap()
     );
-    assert_eq!(
-        osam.read_counter(),
-        osam.write_counter()
-    );
+    assert_eq!(osam.read_counter(), osam.write_counter());
 }
 
 /// Tests the correctness of Path OSAM on a sequence where
@@ -160,13 +147,12 @@ where
 /// 3) the second half of writes are done
 /// 4) read all remaining writes
 pub(crate) fn interspersed_write_and_read<V: OsamBlock, const Z: BucketSize>(
-    osam: &mut PathOsam<V, Z>, 
-    bucket_size: BucketSize, 
-    operation_factor: usize, 
+    osam: &mut PathOsam<V, Z>,
+    bucket_size: BucketSize,
+    operation_factor: usize,
     overflow_size: StashSize,
-    stash_size_experiment: bool
-)
-where
+    stash_size_experiment: bool,
+) where
     Standard: Distribution<V>,
 {
     init_logger();
@@ -224,10 +210,7 @@ where
         mirror_hash_map.remove(address);
     }
 
-    assert_eq!(
-        osam.read_counter(),
-        StashSize::try_from(quarter).unwrap()
-    );
+    assert_eq!(osam.read_counter(), StashSize::try_from(quarter).unwrap());
 
     // Generate the second half of allocs and write a random value
     for _ in half..num_operations {
@@ -255,25 +238,21 @@ where
         osam.write_counter(),
         StashSize::try_from(osam.alloc_counter()).unwrap()
     );
-    assert_eq!(
-        osam.write_counter(),
-        osam.read_counter()
-    );
+    assert_eq!(osam.write_counter(), osam.read_counter());
 }
 
 /// Tests the correctness of Path OSAM on a sequence where
 /// 1) the first quarter of writes are locally to the stash
-/// 2) read all of these writes 
+/// 2) read all of these writes
 /// 3) the last three quarters writes are made to the OSAM
 /// 4) read all remaining writes
 pub(crate) fn locally_interspersed_write_and_read<V: OsamBlock, const Z: BucketSize>(
-    osam: &mut PathOsam<V, Z>, 
-    bucket_size: BucketSize, 
-    operation_factor: usize, 
+    osam: &mut PathOsam<V, Z>,
+    bucket_size: BucketSize,
+    operation_factor: usize,
     overflow_size: StashSize,
-    stash_size_experiment: bool
-)
-where
+    stash_size_experiment: bool,
+) where
     Standard: Distribution<V>,
 {
     init_logger();
@@ -321,10 +300,7 @@ where
     }
     mirror_hash_map.clear();
 
-    assert_eq!(
-        osam.read_counter(),
-        StashSize::try_from(quarter).unwrap()
-    );
+    assert_eq!(osam.read_counter(), StashSize::try_from(quarter).unwrap());
 
     // Generate the second half of allocs and write a random value
     for _ in quarter..num_operations {
@@ -357,7 +333,6 @@ where
         osam.read_counter()
     );
 }
-
 
 macro_rules! create_path_osam_correctness_tests_all_parameters {
     ($osam_type: ident, $prefix: literal, $block_capacity: expr, $block_size: expr, $bucket_size: expr, $overflow_size: expr, $operation_factor: expr, $stash_size_experiment: expr) => {

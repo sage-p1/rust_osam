@@ -13,8 +13,8 @@ use crate::{
     utils::{CompleteBinaryTreeIndex, TreeHeight, TreeIndex},
     BucketSize, CounterSize, Identifier, OsamBlock, OsamError, StashSize,
 };
-use rand::{CryptoRng, Rng};
 use bit_reverse::ParallelReverse;
+use rand::{CryptoRng, Rng};
 use std::collections::HashMap;
 
 /// The parameter "Z" from the Path OSAM literature that sets the number of blocks per bucket; typical values are 3 or 4.
@@ -60,7 +60,7 @@ pub struct PathOsam<V: OsamBlock, const Z: BucketSize> {
     stash: ObliviousStash<V>,
     /// The height of the Path OSAM tree data structure.
     height: TreeHeight,
-    /// The counter that assigns identifiers to Path OSAM blocks. 
+    /// The counter that assigns identifiers to Path OSAM blocks.
     // Also serves as the alloc counter.
     identifier_counter: Identifier,
     /// The counter that deterministically picks which path evict.
@@ -170,7 +170,7 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
         let identifier = self.identifier_counter;
         self.identifier_counter += 1;
 
-        // Randomly select leaf position 
+        // Randomly select leaf position
         let position = CompleteBinaryTreeIndex::random_leaf(self.height, rng)?;
         Ok((identifier, position))
     }
@@ -189,7 +189,8 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
         // Read a dummy path to make reads and writes indistinguishable
         let dummy_position: TreeIndex = CompleteBinaryTreeIndex::random_leaf(self.height, rng)?;
         assert!(dummy_position.is_leaf(self.height));
-        self.stash.read_from_path(&mut self.physical_memory, dummy_position)?;
+        self.stash
+            .read_from_path(&mut self.physical_memory, dummy_position)?;
 
         // Add new block to stash by replacing a dummy block
         self.stash.write_to_stash(identifier, position, value)?;
@@ -197,7 +198,8 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
         // Evict blocks from the stash into the path that was just read,
         // replacing them with dummy blocks
         let evict_position = self.evict_position()?;
-        self.stash.write_to_path(&mut self.physical_memory, evict_position)?;
+        self.stash
+            .write_to_path(&mut self.physical_memory, evict_position)?;
 
         // Bookkeeping of OSAM stats
         self.update_stash_stats();
@@ -238,7 +240,8 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
         assert!(position.is_leaf(self.height));
 
         // Read path containing target block
-        self.stash.read_from_path(&mut self.physical_memory, position)?;
+        self.stash
+            .read_from_path(&mut self.physical_memory, position)?;
 
         // Remove block from stash (and replace with dummy)
         let result = self.stash.read_from_stash(identifier)?;
@@ -246,7 +249,8 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
         // Evict blocks from the stash into the path that was just read,
         // replacing them with dummy blocks.
         let evict_position = self.evict_position()?;
-        self.stash.write_to_path(&mut self.physical_memory, evict_position)?;
+        self.stash
+            .write_to_path(&mut self.physical_memory, evict_position)?;
 
         // Bookkeeping of OSAM stats
         self.update_stash_stats();
@@ -268,7 +272,7 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
         evict_position += num_leaves; // Add bucket offset
         self.evict_counter += 1;
         Ok(evict_position)
-    } 
+    }
 
     /// Outputs the number of real blocks in the stash
     pub fn stash_occupancy(&self) -> StashSize {
@@ -313,7 +317,7 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
             let probability = (*count as f64) / (num_occurrences as f64);
             variance += squared_term * probability;
         }
-        variance     
+        variance
     }
 
     /// Calculates and outputs standard deviation of stash occupancy
@@ -321,7 +325,7 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
         self.variance().powf(0.5)
     }
 
-    /// Outputs variance and standard deviation of stash occupancy together 
+    /// Outputs variance and standard deviation of stash occupancy together
     pub fn variance_and_standard_deviation(&self) -> (f64, f64) {
         let variance = self.variance();
         let standard_deviation = variance.powf(0.5);
@@ -352,7 +356,6 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
     pub fn round_trip_counter(&self) -> StashSize {
         self.round_trip_counter
     }
-
 }
 
 #[cfg(test)]
@@ -361,7 +364,7 @@ mod tests {
 
     use crate::{bucket::*, test_utils::*};
 
-    // Test default parameters. 
+    // Test default parameters.
     create_path_osam_correctness_tests!(4, 40);
 
     // Test small initial stash sizes and correct resizing of stash on overflow.
