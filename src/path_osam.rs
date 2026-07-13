@@ -353,11 +353,8 @@ impl<V: OsamBlock, const Z: BucketSize> Osam for PathOsam<V, Z> {
 
         // Read eviction path to stash
         let evict_position = self.evict_position()?;
-        self.stash.read_from_eviction_path(
-            &mut self.physical_memory,
-            position,
-            evict_position,
-        )?;
+        self.stash
+            .read_from_eviction_path(&mut self.physical_memory, position, evict_position)?;
 
         // Remove block from stash (and replace with dummy)
         let result = self.stash.read_from_stash(identifier)?;
