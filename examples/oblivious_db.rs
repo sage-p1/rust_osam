@@ -39,7 +39,7 @@ fn main() -> Result<(), OsamError> {
         let _ = osam.write(identifier, position, BlockValue::new(*bytes), &mut rng)?;
     }
 
-    // Now osam can be used to obliviously serve the contents of DATABASE.
+    // Now OSAM can be used to obliviously serve the contents of DATABASE.
     let num_operations = 100;
     for _ in 0..num_operations {
         // Assert addresses correctly map to DATABASE

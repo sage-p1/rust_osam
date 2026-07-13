@@ -18,11 +18,13 @@
 //!
 //! # Design
 //!
-//! This crate implements the Path OSAM protocol, with oblivious
-//! client data structures based on the [Oblix paper](https://people.eecs.berkeley.edu/~raluca/oblix.pdf).
-//! See the [Path ORAM retrospective paper](http://elaineshi.com/docs/pathoram-retro.pdf)
-//! for a high-level introduction to ORAM and Path ORAM, and for more detailed references.
-//! See the [OSAM paper]() for an introduction to the model
+//! This crate implements Path OSAM as described for the
+//! [OSAM Model](https://eprint.iacr.org/2024/1029.pdf). It is derived from
+//! [Facebook's Path ORAM](https://github.com/facebook/oram) implementation.
+//! Facebook's original oblivious client data structures are based on the
+//! [Oblix paper](https://people.eecs.berkeley.edu/~raluca/oblix.pdf). See the
+//! [Path ORAM retrospective paper](http://elaineshi.com/docs/pathoram-retro.pdf)
+//! for a high-level introduction to Path ORAM.
 //!
 //! # Example
 //!
@@ -166,10 +168,10 @@ pub trait Osam
 where
     Self: Sized,
 {
-    /// The type of elements stored in the OSAM+.
+    /// The type of elements stored in the OSAM.
     type V: OsamBlock;
 
-    /// Returns the capacity in blocks of this OSAM+.
+    /// Returns the capacity in blocks of this OSAM.
     fn block_capacity(&self) -> usize;
 
     /// Allocates a valid `Identifier` and random`TreeIndex` to be used for reading and writing

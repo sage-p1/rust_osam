@@ -17,7 +17,7 @@ use bit_reverse::ParallelReverse;
 use rand::{CryptoRng, Rng};
 use std::collections::HashMap;
 
-/// The parameter "Z" from the Path OSAM literature that sets the number of blocks per bucket; typical values are 3 or 4.
+/// The parameter "Z" from the Path ORAM literature that sets the number of blocks per bucket; typical values are 3 or 4.
 /// Here we adopt the more conservative setting of 4.
 pub const DEFAULT_BLOCKS_PER_BUCKET: BucketSize = 4;
 
@@ -63,7 +63,7 @@ pub struct PathOsam<V: OsamBlock, const Z: BucketSize> {
     /// The counter that assigns identifiers to Path OSAM blocks.
     // Also serves as the alloc counter.
     identifier_counter: Identifier,
-    /// The counter that deterministically picks which path evict.
+    /// The counter that deterministically picks which path to evict.
     evict_counter: CounterSize,
     /// The maximum occupancy (number of real blocks) observed in the stash at once.
     max_occupancy: StashSize,
@@ -126,7 +126,7 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
         let stash = ObliviousStash::new(path_size, overflow_size)?;
 
         // physical_memory holds `block_capacity` buckets, each storing up to Z blocks.
-        // The number of leaves is `block_capacity` / 2, which the original Path OSAM paper's experiments
+        // The number of leaves is `block_capacity` / 2, which the original Path ORAM paper's experiments
         // found was sufficient to keep the stash size small with high probability.
         let mut physical_memory = Vec::new();
         physical_memory.resize(usize::try_from(number_of_nodes)?, Bucket::<V, Z>::default());
@@ -319,7 +319,7 @@ impl<V: OsamBlock, const Z: BucketSize> Osam for PathOsam<V, Z> {
 
         // Read eviction path to stash
         let evict_position = self.evict_position()?;
-        let _ = self.stash.read_from_eviction_path(
+        self.stash.read_from_eviction_path(
             &mut self.physical_memory,
             dummy_position,
             evict_position,
@@ -353,7 +353,7 @@ impl<V: OsamBlock, const Z: BucketSize> Osam for PathOsam<V, Z> {
 
         // Read eviction path to stash
         let evict_position = self.evict_position()?;
-        let _ = self.stash.read_from_eviction_path(
+        self.stash.read_from_eviction_path(
             &mut self.physical_memory,
             position,
             evict_position,
