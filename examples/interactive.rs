@@ -8,7 +8,7 @@
 //! A simple interactive demonstration of OSAM.
 
 use osam::path_osam::{DEFAULT_BLOCKS_PER_BUCKET, DEFAULT_STASH_OVERFLOW_SIZE};
-use osam::PathOsam;
+use osam::{Osam, PathOsam};
 use rand::rngs::OsRng;
 use rustyline::history::FileHistory;
 use rustyline::Editor;

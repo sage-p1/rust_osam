@@ -1,12 +1,154 @@
-# Running benchmarks
+   Compiling osam v0.2.0-pre.1 (/Users/sagepia/Code/rust_osam)
+    Finished `bench` profile [optimized] target(s) in 4.23s
+     Running unittests src/lib.rs (target/release/deps/osam-99620831c5926257)
 
-Use `cargo bench` to run benchmarks.
+running 142 tests
+test path_osam::tests::interspersed_write_and_read_16_1_3_40_3 ... ignored
+test path_osam::tests::interspersed_write_and_read_16_1_4_10_3 ... ignored
+test path_osam::tests::interspersed_write_and_read_16_1_4_1_3 ... ignored
+test path_osam::tests::interspersed_write_and_read_16_1_4_40_3 ... ignored
+test path_osam::tests::interspersed_write_and_read_16_1_5_40_3 ... ignored
+test path_osam::tests::interspersed_write_and_read_2_1_3_40_1 ... ignored
+test path_osam::tests::interspersed_write_and_read_2_1_4_10_1 ... ignored
+test path_osam::tests::interspersed_write_and_read_2_1_4_1_1 ... ignored
+test path_osam::tests::interspersed_write_and_read_2_1_4_40_1 ... ignored
+test path_osam::tests::interspersed_write_and_read_2_1_5_40_1 ... ignored
+test path_osam::tests::interspersed_write_and_read_4_1_3_40_1 ... ignored
+test path_osam::tests::interspersed_write_and_read_4_1_4_10_1 ... ignored
+test path_osam::tests::interspersed_write_and_read_4_1_4_1_1 ... ignored
+test path_osam::tests::interspersed_write_and_read_4_1_4_40_1 ... ignored
+test path_osam::tests::interspersed_write_and_read_4_1_5_40_1 ... ignored
+test path_osam::tests::interspersed_write_and_read_4_2_3_40_2 ... ignored
+test path_osam::tests::interspersed_write_and_read_4_2_4_10_2 ... ignored
+test path_osam::tests::interspersed_write_and_read_4_2_4_1_2 ... ignored
+test path_osam::tests::interspersed_write_and_read_4_2_4_40_2 ... ignored
+test path_osam::tests::interspersed_write_and_read_4_2_5_40_2 ... ignored
+test path_osam::tests::interspersed_write_and_read_8_1_3_40_1 ... ignored
+test path_osam::tests::interspersed_write_and_read_8_1_4_10_1 ... ignored
+test path_osam::tests::interspersed_write_and_read_8_1_4_1_1 ... ignored
+test path_osam::tests::interspersed_write_and_read_8_1_4_40_1 ... ignored
+test path_osam::tests::interspersed_write_and_read_8_1_5_40_1 ... ignored
+test path_osam::tests::interspersed_write_and_read_stash_size_16_1_4_40 ... ignored
+test path_osam::tests::interspersed_write_and_read_stash_size_2_1_4_40 ... ignored
+test path_osam::tests::interspersed_write_and_read_stash_size_4_1_4_40 ... ignored
+test path_osam::tests::interspersed_write_and_read_stash_size_4_2_4_40 ... ignored
+test path_osam::tests::interspersed_write_and_read_stash_size_8_1_4_40 ... ignored
+test path_osam::tests::local_write_then_read_16_1_3_40_3 ... ignored
+test path_osam::tests::local_write_then_read_16_1_4_10_3 ... ignored
+test path_osam::tests::local_write_then_read_16_1_4_1_3 ... ignored
+test path_osam::tests::local_write_then_read_16_1_4_40_3 ... ignored
+test path_osam::tests::local_write_then_read_16_1_5_40_3 ... ignored
+test path_osam::tests::local_write_then_read_2_1_3_40_1 ... ignored
+test path_osam::tests::local_write_then_read_2_1_4_10_1 ... ignored
+test path_osam::tests::local_write_then_read_2_1_4_1_1 ... ignored
+test path_osam::tests::local_write_then_read_2_1_4_40_1 ... ignored
+test path_osam::tests::local_write_then_read_2_1_5_40_1 ... ignored
+test path_osam::tests::local_write_then_read_4_1_3_40_1 ... ignored
+test path_osam::tests::local_write_then_read_4_1_4_10_1 ... ignored
+test path_osam::tests::local_write_then_read_4_1_4_1_1 ... ignored
+test path_osam::tests::local_write_then_read_4_1_4_40_1 ... ignored
+test path_osam::tests::local_write_then_read_4_1_5_40_1 ... ignored
+test path_osam::tests::local_write_then_read_4_2_3_40_2 ... ignored
+test path_osam::tests::local_write_then_read_4_2_4_10_2 ... ignored
+test path_osam::tests::local_write_then_read_4_2_4_1_2 ... ignored
+test path_osam::tests::local_write_then_read_4_2_4_40_2 ... ignored
+test path_osam::tests::local_write_then_read_4_2_5_40_2 ... ignored
+test path_osam::tests::local_write_then_read_8_1_3_40_1 ... ignored
+test path_osam::tests::local_write_then_read_8_1_4_10_1 ... ignored
+test path_osam::tests::local_write_then_read_8_1_4_1_1 ... ignored
+test path_osam::tests::local_write_then_read_8_1_4_40_1 ... ignored
+test path_osam::tests::local_write_then_read_8_1_5_40_1 ... ignored
+test path_osam::tests::locally_interspersed_write_and_read_16_1_3_40_3 ... ignored
+test path_osam::tests::locally_interspersed_write_and_read_16_1_4_10_3 ... ignored
+test path_osam::tests::locally_interspersed_write_and_read_16_1_4_1_3 ... ignored
+test path_osam::tests::locally_interspersed_write_and_read_16_1_4_40_3 ... ignored
+test path_osam::tests::locally_interspersed_write_and_read_16_1_5_40_3 ... ignored
+test path_osam::tests::locally_interspersed_write_and_read_2_1_3_40_1 ... ignored
+test path_osam::tests::locally_interspersed_write_and_read_2_1_4_10_1 ... ignored
+test path_osam::tests::locally_interspersed_write_and_read_2_1_4_1_1 ... ignored
+test path_osam::tests::locally_interspersed_write_and_read_2_1_4_40_1 ... ignored
+test path_osam::tests::locally_interspersed_write_and_read_2_1_5_40_1 ... ignored
+test path_osam::tests::locally_interspersed_write_and_read_4_1_3_40_1 ... ignored
+test path_osam::tests::locally_interspersed_write_and_read_4_1_4_10_1 ... ignored
+test path_osam::tests::locally_interspersed_write_and_read_4_1_4_1_1 ... ignored
+test path_osam::tests::locally_interspersed_write_and_read_4_1_4_40_1 ... ignored
+test path_osam::tests::locally_interspersed_write_and_read_4_1_5_40_1 ... ignored
+test path_osam::tests::locally_interspersed_write_and_read_4_2_3_40_2 ... ignored
+test path_osam::tests::locally_interspersed_write_and_read_4_2_4_10_2 ... ignored
+test path_osam::tests::locally_interspersed_write_and_read_4_2_4_1_2 ... ignored
+test path_osam::tests::locally_interspersed_write_and_read_4_2_4_40_2 ... ignored
+test path_osam::tests::locally_interspersed_write_and_read_4_2_5_40_2 ... ignored
+test path_osam::tests::locally_interspersed_write_and_read_8_1_3_40_1 ... ignored
+test path_osam::tests::locally_interspersed_write_and_read_8_1_4_10_1 ... ignored
+test path_osam::tests::locally_interspersed_write_and_read_8_1_4_1_1 ... ignored
+test path_osam::tests::locally_interspersed_write_and_read_8_1_4_40_1 ... ignored
+test path_osam::tests::locally_interspersed_write_and_read_8_1_5_40_1 ... ignored
+test path_osam::tests::read_then_write_16_1_3_40_3 ... ignored
+test path_osam::tests::read_then_write_16_1_4_10_3 ... ignored
+test path_osam::tests::read_then_write_16_1_4_1_3 ... ignored
+test path_osam::tests::read_then_write_16_1_4_40_3 ... ignored
+test path_osam::tests::read_then_write_16_1_5_40_3 ... ignored
+test path_osam::tests::read_then_write_2_1_3_40_1 ... ignored
+test path_osam::tests::read_then_write_2_1_4_10_1 ... ignored
+test path_osam::tests::read_then_write_2_1_4_1_1 ... ignored
+test path_osam::tests::read_then_write_2_1_4_40_1 ... ignored
+test path_osam::tests::read_then_write_2_1_5_40_1 ... ignored
+test path_osam::tests::read_then_write_4_1_3_40_1 ... ignored
+test path_osam::tests::read_then_write_4_1_4_10_1 ... ignored
+test path_osam::tests::read_then_write_4_1_4_1_1 ... ignored
+test path_osam::tests::read_then_write_4_1_4_40_1 ... ignored
+test path_osam::tests::read_then_write_4_1_5_40_1 ... ignored
+test path_osam::tests::read_then_write_4_2_3_40_2 ... ignored
+test path_osam::tests::read_then_write_4_2_4_10_2 ... ignored
+test path_osam::tests::read_then_write_4_2_4_1_2 ... ignored
+test path_osam::tests::read_then_write_4_2_4_40_2 ... ignored
+test path_osam::tests::read_then_write_4_2_5_40_2 ... ignored
+test path_osam::tests::read_then_write_8_1_3_40_1 ... ignored
+test path_osam::tests::read_then_write_8_1_4_10_1 ... ignored
+test path_osam::tests::read_then_write_8_1_4_1_1 ... ignored
+test path_osam::tests::read_then_write_8_1_4_40_1 ... ignored
+test path_osam::tests::read_then_write_8_1_5_40_1 ... ignored
+test path_osam::tests::read_then_write_stash_size_16_1_4_40 ... ignored
+test path_osam::tests::read_then_write_stash_size_2_1_4_40 ... ignored
+test path_osam::tests::read_then_write_stash_size_4_1_4_40 ... ignored
+test path_osam::tests::read_then_write_stash_size_4_2_4_40 ... ignored
+test path_osam::tests::read_then_write_stash_size_8_1_4_40 ... ignored
+test path_osam::tests::write_then_read_16_1_3_40_3 ... ignored
+test path_osam::tests::write_then_read_16_1_4_10_3 ... ignored
+test path_osam::tests::write_then_read_16_1_4_1_3 ... ignored
+test path_osam::tests::write_then_read_16_1_4_40_3 ... ignored
+test path_osam::tests::write_then_read_16_1_5_40_3 ... ignored
+test path_osam::tests::write_then_read_2_1_3_40_1 ... ignored
+test path_osam::tests::write_then_read_2_1_4_10_1 ... ignored
+test path_osam::tests::write_then_read_2_1_4_1_1 ... ignored
+test path_osam::tests::write_then_read_2_1_4_40_1 ... ignored
+test path_osam::tests::write_then_read_2_1_5_40_1 ... ignored
+test path_osam::tests::write_then_read_4_1_3_40_1 ... ignored
+test path_osam::tests::write_then_read_4_1_4_10_1 ... ignored
+test path_osam::tests::write_then_read_4_1_4_1_1 ... ignored
+test path_osam::tests::write_then_read_4_1_4_40_1 ... ignored
+test path_osam::tests::write_then_read_4_1_5_40_1 ... ignored
+test path_osam::tests::write_then_read_4_2_3_40_2 ... ignored
+test path_osam::tests::write_then_read_4_2_4_10_2 ... ignored
+test path_osam::tests::write_then_read_4_2_4_1_2 ... ignored
+test path_osam::tests::write_then_read_4_2_4_40_2 ... ignored
+test path_osam::tests::write_then_read_4_2_5_40_2 ... ignored
+test path_osam::tests::write_then_read_8_1_3_40_1 ... ignored
+test path_osam::tests::write_then_read_8_1_4_10_1 ... ignored
+test path_osam::tests::write_then_read_8_1_4_1_1 ... ignored
+test path_osam::tests::write_then_read_8_1_4_40_1 ... ignored
+test path_osam::tests::write_then_read_8_1_5_40_1 ... ignored
+test path_osam::tests::write_then_read_stash_size_16_1_4_40 ... ignored
+test path_osam::tests::write_then_read_stash_size_2_1_4_40 ... ignored
+test path_osam::tests::write_then_read_stash_size_4_1_4_40 ... ignored
+test path_osam::tests::write_then_read_stash_size_4_2_4_40 ... ignored
+test path_osam::tests::write_then_read_stash_size_8_1_4_40 ... ignored
+test utils::tests::check_size_of_tree_index ... ignored
+test utils::tests::test_bitonic_sort ... ignored
 
-# Example benchmark output
+test result: ok. 0 passed; 0 failed; 142 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-```
-% cargo bench
-Running benches/benchmark.rs (target/release/deps/benchmark-b2a89f5f4c1a5769)
+     Running benches/benchmark.rs (target/release/deps/benchmark-b2a89f5f4c1a5769)
 Gnuplot not found, using plotters backend
 Benchmarking PathOsam::initialization/(Capacity: 16384 Blocksize: 4096)
 Benchmarking PathOsam::initialization/(Capacity: 16384 Blocksize: 4096): Warming up for 100.00 ms
@@ -509,26 +651,3 @@ PathOsam::random_operations/(Capacity: 1048576 Blocksize: 64, Ops: 64)
                         change: [-20.024% -1.2452% +22.727%] (p = 0.92 > 0.05)
                         No change in performance detected.
 
-Each read and write read a root-to-leaf path of data. Additionally, both also deterministically download an eviction path. The eviction path may coincide with the first path read, so only `height` blocks are downloaded. At worst, the eviction path, besides the root, is completely different than the first path. This means `2*height - 1` buckets are downloaded. Writes are always the same since we evict one deterministic path.
-
-Physical reads and writes incurred by 1 PathOsam::read:
-OSAM Capacity   | OSAM Blocksize  | Physical Reads  | Physical Writes
-64              | 64              | 6-11            | 6              
-256             | 64              | 8-15            | 8              
-64              | 4096            | 6-11            | 6              
-256             | 4096            | 8-15            | 8              
-
-Physical reads and writes incurred by 1 PathOsam::write:
-OSAM Capacity   | OSAM Blocksize  | Physical Reads  | Physical Writes
-64              | 64              | 6-11            | 6              
-256             | 64              | 8-15            | 8              
-64              | 4096            | 6-11            | 6              
-256             | 4096            | 8-15            | 8              
-
-Physical reads and writes incurred by 64 random PathOsam operations:
-OSAM Capacity   | OSAM Blocksize  | Physical Reads  | Physical Writes
-64              | 64              | 384-704         | 384            
-256             | 64              | 512-960         | 512            
-64              | 4096            | 384-704         | 384            
-256             | 4096            | 512-960         | 512                              
-```

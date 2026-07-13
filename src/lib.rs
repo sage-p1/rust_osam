@@ -20,15 +20,16 @@
 //!
 //! This crate implements the Path OSAM protocol, with oblivious
 //! client data structures based on the [Oblix paper](https://people.eecs.berkeley.edu/~raluca/oblix.pdf).
-//! See the [Path OSAM retrospective paper](http://elaineshi.com/docs/pathosam-retro.pdf)
-//! for a high-level introduction to OSAM and Path OSAM, and for more detailed references.
+//! See the [Path ORAM retrospective paper](http://elaineshi.com/docs/pathoram-retro.pdf)
+//! for a high-level introduction to ORAM and Path ORAM, and for more detailed references.
+//! See the [OSAM paper]() for an introduction to the model
 //!
 //! # Example
 //!
 //! The below example reads a database from memory into an OSAM, thus permitting secret-dependent accesses.
 //!
 //! ```
-//! use osam::{BlockSize, BlockValue, Identifier, PathOsam, TreeIndex};
+//! use osam::{BlockSize, BlockValue, Identifier, Osam, PathOsam, TreeIndex};
 //! use osam::path_osam::{DEFAULT_BLOCKS_PER_BUCKET, DEFAULT_STASH_OVERFLOW_SIZE};
 //! # use osam::OsamError;
 //!
@@ -80,7 +81,7 @@
 //!
 //! ```
 //! use osam::{BlockSize, BlockValue, BucketSize,
-//!             Identifier, PathOsam, StashSize};
+//!             Identifier, Osam, PathOsam, StashSize};
 //! use osam::path_osam::{DEFAULT_BLOCKS_PER_BUCKET, DEFAULT_STASH_OVERFLOW_SIZE};
 //! # use osam::OsamError;
 //! # let mut rng = rand::rngs::OsRng;
@@ -101,11 +102,10 @@
 
 #![warn(clippy::cargo, clippy::doc_markdown, missing_docs, rustdoc::all)]
 
+use rand::{CryptoRng, Rng};
 use std::num::TryFromIntError;
-
 use subtle::ConditionallySelectable;
 use thiserror::Error;
-// use utils::TreeIndex;
 
 pub(crate) mod bucket;
 pub mod path_osam;
@@ -158,4 +158,39 @@ pub enum OsamError {
         /// Its invalid value.
         parameter_value: String,
     },
+}
+
+/// Represents an oblivious SAM (OSAM) mapping identifiers of type `Identifier`
+/// and position of type `TreeIndex` to values of type `V: OsamBlock`.
+pub trait Osam
+where
+    Self: Sized,
+{
+    /// The type of elements stored in the OSAM+.
+    type V: OsamBlock;
+
+    /// Returns the capacity in blocks of this OSAM+.
+    fn block_capacity(&self) -> usize;
+
+    /// Allocates a valid `Identifier` and random`TreeIndex` to be used for reading and writing
+    fn alloc<R: Rng + CryptoRng>(
+        &mut self,
+        rng: &mut R,
+    ) -> Result<(Identifier, TreeIndex), OsamError>;
+
+    /// Obliviously writes the value stored `identifier` and `position`. Evicts blocks to server.
+    fn write<R: Rng + CryptoRng>(
+        &mut self,
+        identifier: Identifier,
+        position: TreeIndex,
+        value: Self::V,
+        rng: &mut R,
+    ) -> Result<(), OsamError>;
+
+    /// Obliviously reads the value stored at `index`.
+    fn read(
+        &mut self,
+        identifier: Identifier,
+        position: TreeIndex,
+    ) -> Result<Option<Self::V>, OsamError>;
 }

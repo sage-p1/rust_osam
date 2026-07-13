@@ -5,12 +5,12 @@
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 // of this source tree. You may select, at your option, one of the above-listed licenses.
 
-//! An example of using OSAM to obliviously serve an indexed database.
+//! An example of using Path OSAM to obliviously serve an indexed database.
 
 extern crate osam;
 
 use osam::path_osam::{DEFAULT_BLOCKS_PER_BUCKET, DEFAULT_STASH_OVERFLOW_SIZE};
-use osam::{BlockSize, BlockValue, Identifier, OsamError, PathOsam, TreeIndex};
+use osam::{BlockSize, BlockValue, Identifier, Osam, OsamError, PathOsam, TreeIndex};
 use rand::{rngs::OsRng, Rng};
 
 const BLOCK_SIZE: BlockSize = 4096;

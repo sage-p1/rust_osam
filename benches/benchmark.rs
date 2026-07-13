@@ -11,7 +11,7 @@ extern crate criterion;
 use core::fmt;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use osam::path_osam::DEFAULT_STASH_OVERFLOW_SIZE;
-use osam::{BlockSize, BlockValue, BucketSize, Identifier, PathOsam, TreeIndex};
+use osam::{BlockSize, BlockValue, BucketSize, Identifier, Osam, PathOsam, TreeIndex};
 use std::mem;
 use std::time::Duration;
 
@@ -19,7 +19,7 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 
 const CAPACITIES_TO_BENCHMARK: [Identifier; 3] = [1 << 14, 1 << 16, 1 << 20];
 
-// Here, all benchmarks are run for linear and path OSAMs, and block sizes of 64 and 4096.
+// Here, all benchmarks are run for Path OSAMs and block sizes of 64 and 4096.
 criterion_group!(
     name = benches;
     config = Criterion::default().warm_up_time(Duration::new(0, 1_000_000_00)).measurement_time(Duration::new(0, 1_000_000_00)).sample_size(10);
