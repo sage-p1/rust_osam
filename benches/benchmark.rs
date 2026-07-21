@@ -12,10 +12,9 @@ use core::fmt;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use osam::path_osam::DEFAULT_STASH_OVERFLOW_SIZE;
 use osam::{BlockSize, BlockValue, BucketSize, Identifier, Osam, PathOsam, TreeIndex};
+use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::mem;
 use std::time::Duration;
-
-use rand::{rngs::StdRng, Rng, SeedableRng};
 
 const CAPACITIES_TO_BENCHMARK: [Identifier; 3] = [1 << 14, 1 << 16, 1 << 20];
 
@@ -101,8 +100,11 @@ fn benchmark_alloc_and_read<const B: BlockSize, const Z: BucketSize>(c: &mut Cri
                 block_size: mem::size_of::<BlockValue<B>>(),
             }),
             |b| {
-                let address = osam.alloc(&mut rng).unwrap();
-                b.iter(|| osam.read(address.0, address.1));
+                b.iter(|| {
+                    let address = osam.alloc(&mut rng).unwrap();
+                    let ordered_evict = rng.gen_bool(0.5);
+                    let _ = osam.read(address.0, address.1, ordered_evict, &mut rng);
+                });
             },
         );
     }
@@ -110,6 +112,7 @@ fn benchmark_alloc_and_read<const B: BlockSize, const Z: BucketSize>(c: &mut Cri
 
 fn benchmark_read<const B: BlockSize, const Z: BucketSize>(c: &mut Criterion) {
     let mut group = c.benchmark_group(String::from("PathOsam") + "::read");
+    let mut rng = StdRng::seed_from_u64(0);
     for capacity in CAPACITIES_TO_BENCHMARK.iter() {
         let mut osam = PathOsam::<BlockValue<B>, Z>::new_with_parameters(
             *capacity,
@@ -121,7 +124,12 @@ fn benchmark_read<const B: BlockSize, const Z: BucketSize>(c: &mut Criterion) {
                 capacity: *capacity,
                 block_size: mem::size_of::<BlockValue<B>>(),
             }),
-            |b| b.iter(|| osam.read(1, *capacity - 1)),
+            |b| {
+                b.iter(|| {
+                    let ordered_evict = rng.gen_bool(0.5);
+                    let _ = osam.read(1, *capacity - 1, ordered_evict, &mut rng);
+                })
+            },
         );
     }
 }
@@ -141,8 +149,17 @@ fn benchmark_alloc_and_write<const B: BlockSize, const Z: BucketSize>(c: &mut Cr
                 block_size: mem::size_of::<BlockValue<B>>(),
             }),
             |b| {
-                let address = osam.alloc(&mut rng).unwrap();
-                b.iter(|| osam.write(address.0, address.1, BlockValue::<B>::default(), &mut rng));
+                b.iter(|| {
+                    let address = osam.alloc(&mut rng).unwrap();
+                    let ordered_evict = rng.gen_bool(0.5);
+                    let _ = osam.write(
+                        address.0,
+                        address.1,
+                        BlockValue::<B>::default(),
+                        ordered_evict,
+                        &mut rng,
+                    );
+                });
             },
         );
     }
@@ -162,7 +179,18 @@ fn benchmark_write<const B: BlockSize, const Z: BucketSize>(c: &mut Criterion) {
                 capacity: *capacity,
                 block_size: mem::size_of::<BlockValue<B>>(),
             }),
-            |b| b.iter(|| osam.write(1, *capacity - 1, BlockValue::<B>::default(), &mut rng)),
+            |b| {
+                b.iter(|| {
+                    let ordered_evict = rng.gen_bool(0.5);
+                    let _ = osam.write(
+                        1,
+                        *capacity - 1,
+                        BlockValue::<B>::default(),
+                        ordered_evict,
+                        &mut rng,
+                    );
+                })
+            },
         );
     }
 }
@@ -182,8 +210,10 @@ fn benchmark_alloc_and_local_write<const B: BlockSize, const Z: BucketSize>(c: &
                 block_size: mem::size_of::<BlockValue<B>>(),
             }),
             |b| {
-                let address = osam.alloc(&mut rng).unwrap();
-                b.iter(|| osam.local_write(address.0, address.1, BlockValue::<B>::default()));
+                b.iter(|| {
+                    let address = osam.alloc(&mut rng).unwrap();
+                    let _ = osam.local_write(address.0, address.1, BlockValue::<B>::default());
+                });
             },
         );
     }
@@ -271,9 +301,11 @@ fn run_many_random_accesses<const B: BlockSize, const Z: BucketSize>(
         let identifier = address.0;
         let position = address.1;
         let random_read_versus_write: bool = read_versus_write_randomness[operation_number];
+        let ordered_evict = rng.gen_bool(0.5);
 
         if random_read_versus_write {
-            osam.read(identifier, position).unwrap();
+            osam.read(identifier, position, ordered_evict, &mut rng)
+                .unwrap();
         } else {
             let block_size = B;
             let start_index = block_size * operation_number;
@@ -286,6 +318,7 @@ fn run_many_random_accesses<const B: BlockSize, const Z: BucketSize>(
                     identifier,
                     position,
                     BlockValue::new(random_bytes),
+                    ordered_evict,
                     &mut rng,
                 )
                 .unwrap();

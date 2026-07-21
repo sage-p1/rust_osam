@@ -9,7 +9,7 @@
 
 use osam::path_osam::{DEFAULT_BLOCKS_PER_BUCKET, DEFAULT_STASH_OVERFLOW_SIZE};
 use osam::{Osam, PathOsam};
-use rand::rngs::OsRng;
+use rand::{rngs::OsRng, Rng};
 use rustyline::history::FileHistory;
 use rustyline::Editor;
 
@@ -78,13 +78,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             if action == "w" {
                 let value = parse_u64("\nEnter value: ", &mut rl)?;
-                let _ = osam.write(identifier, position, value, &mut rng)?;
+                let ordered_evict = rng.gen_bool(0.5);
+                let _ = osam.write(identifier, position, value, ordered_evict, &mut rng)?;
                 println!(
                     "\nWrote value {} to address (identifier: {}, position: {}).",
                     value, identifier, position
                 );
             } else {
-                let value = osam.read(identifier, position)?;
+                let ordered_evict = rng.gen_bool(0.5);
+                let value = osam.read(identifier, position, ordered_evict, &mut rng)?;
                 match value {
                     Some(v) => println!(
                         "\nValue at address (identifier: {}, position: {}) is {}",

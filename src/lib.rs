@@ -33,6 +33,7 @@
 //! ```
 //! use osam::{BlockSize, BlockValue, Identifier, Osam, PathOsam, TreeIndex};
 //! use osam::path_osam::{DEFAULT_BLOCKS_PER_BUCKET, DEFAULT_STASH_OVERFLOW_SIZE};
+//! use rand::{rngs::OsRng, Rng};
 //! # use osam::OsamError;
 //!
 //! const BLOCK_SIZE: BlockSize = 64;
@@ -55,7 +56,8 @@
 //!     addresses[i] = address;
 //!     let identifier = address.0;
 //!     let position = address.1;
-//!     let _ = osam.write(identifier, position, BlockValue::new(*bytes), &mut rng)?;
+//!     let ordered_evict = rng.gen_bool(0.5);
+//!     let _ = osam.write(identifier, position, BlockValue::new(*bytes), ordered_evict, &mut rng)?;
 //! }
 //!
 //! // Now you can safely make secret-dependent accesses to your database.
@@ -63,7 +65,8 @@
 //!     let address = addresses[i];
 //!     let identifier = address.0;
 //!     let position = address.1;
-//!     let bytes = osam.read(identifier, position)?.unwrap();
+//!     let ordered_evict = rng.gen_bool(0.5);
+//!     let bytes = osam.read(identifier, position, ordered_evict, &mut rng)?.unwrap();
 //!     assert_eq!(bytes, BlockValue::new(DATABASE[i]));
 //! }
 //!
@@ -174,7 +177,7 @@ where
     /// Returns the capacity in blocks of this OSAM.
     fn block_capacity(&self) -> usize;
 
-    /// Allocates a valid `Identifier` and random`TreeIndex` to be used for reading and writing
+    /// Allocates a valid `Identifier` and random`TreeIndex` to be used for reading and writing.
     fn alloc<R: Rng + CryptoRng>(
         &mut self,
         rng: &mut R,
@@ -186,13 +189,16 @@ where
         identifier: Identifier,
         position: TreeIndex,
         value: Self::V,
+        ordered_evict: bool,
         rng: &mut R,
     ) -> Result<(), OsamError>;
 
     /// Obliviously reads the value stored at `index`.
-    fn read(
+    fn read<R: Rng + CryptoRng>(
         &mut self,
         identifier: Identifier,
         position: TreeIndex,
+        ordered_evict: bool,
+        rng: &mut R,
     ) -> Result<Option<Self::V>, OsamError>;
 }

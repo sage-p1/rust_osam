@@ -36,26 +36,35 @@ fn main() -> Result<(), OsamError> {
         addresses[i] = address;
         let identifier = address.0;
         let position = address.1;
-        let _ = osam.write(identifier, position, BlockValue::new(*bytes), &mut rng)?;
+        let ordered_evict = rng.gen_bool(0.5);
+        let _ = osam.write(
+            identifier,
+            position,
+            BlockValue::new(*bytes),
+            ordered_evict,
+            &mut rng,
+        )?;
     }
 
     // Now OSAM can be used to obliviously serve the contents of DATABASE.
     let num_operations = 100;
     for _ in 0..num_operations {
-        // Assert addresses correctly map to DATABASE
+        // Assert addresses correctly map to DATABASE.
         let random_index = rng.gen_range(0..DB_SIZE) as usize;
         let address = addresses[random_index];
         let identifier = address.0;
         let position = address.1;
-        let value = (osam.read(identifier, position)?).unwrap();
+        let ordered_evict = rng.gen_bool(0.5);
+        let value = (osam.read(identifier, position, ordered_evict, &mut rng)?).unwrap();
         assert_eq!(value, BlockValue::new(DATABASE[random_index]));
 
-        // Write DATABASE item back
+        // Write DATABASE item back.
         let address = osam.alloc(&mut rng)?;
         addresses[random_index] = address;
         let identifier = address.0;
         let position = address.1;
-        let _ = osam.write(identifier, position, value, &mut rng)?;
+        let ordered_evict = rng.gen_bool(0.5);
+        let _ = osam.write(identifier, position, value, ordered_evict, &mut rng)?;
     }
 
     Ok(())

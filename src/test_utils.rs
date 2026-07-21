@@ -33,8 +33,8 @@ pub(crate) fn init_logger() {
     })
 }
 
-/// Tests the correctness of OSAM on a sequence of all writes then reads
-pub(crate) fn write_then_read<T: Osam>(osam: &mut T, num_operations: usize)
+/// Tests the correctness of OSAM on a sequence of all writes then reads.
+pub(crate) fn write_then_read<T: Osam>(osam: &mut T, num_operations: usize, probability: f64)
 where
     Standard: Distribution<T::V>,
 {
@@ -42,52 +42,80 @@ where
     let mut rng = StdRng::seed_from_u64(0);
     let mut mirror_hash_map = HashMap::new();
 
-    // Generate a sequence of allocs and write a random value
+    // Generate a sequence of allocs and write a random value.
     for _ in 0..num_operations {
         let address = osam.alloc(&mut rng).unwrap();
         let identifier = address.0;
         let position = address.1;
         let random_block_value = rng.gen::<T::V>();
+        let ordered_evict = rng.gen_bool(probability);
+
         mirror_hash_map.insert(address, random_block_value);
-        let _ = osam.write(identifier, position, random_block_value, &mut rng);
+        let _ = osam.write(
+            identifier,
+            position,
+            random_block_value,
+            ordered_evict,
+            &mut rng,
+        );
     }
 
-    // Assert reads fetch the proper data block
+    // Assert reads fetch the proper data block.
     for (address, random_block_value) in mirror_hash_map.iter() {
         let identifier = address.0;
         let position = address.1;
+        let ordered_evict = rng.gen_bool(probability);
+
         assert_eq!(
-            osam.read(identifier, position).unwrap().unwrap(),
+            osam.read(identifier, position, ordered_evict, &mut rng)
+                .unwrap()
+                .unwrap(),
             *random_block_value
         );
     }
 }
 
-/// Tests the correctness of Path OSAM on a sequence of all reads then writes
-pub(crate) fn read_then_write<T: Osam>(osam: &mut T, num_operations: usize)
+/// Tests the correctness of Path OSAM on a sequence of all reads then writes.
+pub(crate) fn read_then_write<T: Osam>(osam: &mut T, num_operations: usize, probability: f64)
 where
     Standard: Distribution<T::V>,
 {
     init_logger();
     let mut rng = StdRng::seed_from_u64(0);
 
-    // Generate a sequence of allocs and write a random value
+    // Generate a sequence of allocs to read and then write a random value.
     for _ in 0..num_operations {
         let address = osam.alloc(&mut rng).unwrap();
         let identifier = address.0;
         let position = address.1;
-        assert_eq!(osam.read(identifier, position).unwrap(), None);
-        let _ = osam.write(identifier, position, T::V::default(), &mut rng);
+        let ordered_evict = rng.gen_bool(probability);
+        assert_eq!(
+            osam.read(identifier, position, ordered_evict, &mut rng)
+                .unwrap(),
+            None
+        );
+
+        let ordered_evict = rng.gen_bool(probability);
+        let _ = osam.write(
+            identifier,
+            position,
+            T::V::default(),
+            ordered_evict,
+            &mut rng,
+        );
     }
 }
 
-/// Tests the correctness of Path OSAM on a sequence where
-/// 1) the first half of writes are made to the OSAM
-/// 2) read half of these writes (quarter of all writes)
-/// 3) the second half of writes are done
-/// 4) read all remaining writes
-pub(crate) fn interspersed_write_and_read<T: Osam>(osam: &mut T, num_operations: usize)
-where
+/// Tests the correctness of Path OSAM on a sequence where:
+/// 1) the first half of writes are made to the OSAM.
+/// 2) read half of these writes (quarter of all writes).
+/// 3) the second half of writes are done.
+/// 4) read all remaining writes.
+pub(crate) fn interspersed_write_and_read<T: Osam>(
+    osam: &mut T,
+    num_operations: usize,
+    probability: f64,
+) where
     Standard: Distribution<T::V>,
 {
     init_logger();
@@ -97,17 +125,25 @@ where
     let half = num_operations.checked_div(2).unwrap();
     let quarter = num_operations.checked_div(4).unwrap();
 
-    // Generate the first half of allocs and write a random value
+    // Generate the first half of allocs and write a random value.
     for _ in 0..half {
         let address = osam.alloc(&mut rng).unwrap();
         let identifier = address.0;
         let position = address.1;
         let random_block_value = rng.gen::<T::V>();
+        let ordered_evict = rng.gen_bool(probability);
+
         mirror_hash_map.insert(address, random_block_value);
-        let _ = osam.write(identifier, position, random_block_value, &mut rng);
+        let _ = osam.write(
+            identifier,
+            position,
+            random_block_value,
+            ordered_evict,
+            &mut rng,
+        );
     }
 
-    // Assert reads fetch the proper data block for half the first writes (quarter of all)
+    // Assert reads fetch the proper data block for half the first writes (quarter of all).
     let mut used_addresses = Vec::new();
     let mut counter = 0;
     for (address, random_block_value) in mirror_hash_map.iter() {
@@ -116,44 +152,60 @@ where
         }
         let identifier = address.0;
         let position = address.1;
+        let ordered_evict = rng.gen_bool(probability);
+
         assert_eq!(
-            osam.read(identifier, position).unwrap().unwrap(),
+            osam.read(identifier, position, ordered_evict, &mut rng)
+                .unwrap()
+                .unwrap(),
             *random_block_value
         );
         used_addresses.push(address.to_owned());
         counter += 1;
     }
 
-    // Remove used addresses to avoid double reading
+    // Remove used addresses to avoid double reading.
     for address in used_addresses.iter() {
         mirror_hash_map.remove(address);
     }
 
-    // Generate the second half of allocs and write a random value
+    // Generate the second half of allocs and write a random value.
     for _ in half..num_operations {
         let address = osam.alloc(&mut rng).unwrap();
         let identifier = address.0;
         let position = address.1;
         let random_block_value = rng.gen::<T::V>();
+        let ordered_evict = rng.gen_bool(probability);
+
         mirror_hash_map.insert(address, random_block_value);
-        let _ = osam.write(identifier, position, random_block_value, &mut rng);
+        let _ = osam.write(
+            identifier,
+            position,
+            random_block_value,
+            ordered_evict,
+            &mut rng,
+        );
     }
 
-    // Assert the remaining three quarters of reads are correct
+    // Assert the remaining three quarters of reads are correct.
     for (address, random_block_value) in mirror_hash_map.iter() {
         let identifier = address.0;
         let position = address.1;
+        let ordered_evict = rng.gen_bool(probability);
         assert_eq!(
-            osam.read(identifier, position).unwrap().unwrap(),
+            osam.read(identifier, position, ordered_evict, &mut rng)
+                .unwrap()
+                .unwrap(),
             *random_block_value
         );
     }
 }
 
-/// Tests the correctness of PathOsam on a sequence of all writes then reads
+/// Tests the correctness of PathOsam on a sequence of all writes then reads.
 pub(crate) fn local_write_then_read<V: OsamBlock, const Z: BucketSize>(
     osam: &mut PathOsam<V, Z>,
     num_operations: usize,
+    probability: f64,
 ) where
     Standard: Distribution<V>,
 {
@@ -161,36 +213,41 @@ pub(crate) fn local_write_then_read<V: OsamBlock, const Z: BucketSize>(
     let mut rng = StdRng::seed_from_u64(0);
     let mut mirror_hash_map = HashMap::new();
 
-    // Generate a sequence of allocs and write a random value
+    // Generate a sequence of allocs and write a random value.
     for _ in 0..num_operations {
         let address = osam.alloc(&mut rng).unwrap();
         let identifier = address.0;
         let position = address.1;
         let random_block_value = rng.gen::<V>();
+
         mirror_hash_map.insert(address, random_block_value);
         let _ = osam.local_write(identifier, position, random_block_value);
     }
 
-    // Assert reads fetch the proper data block
+    // Assert reads fetch the proper data block.
     for (address, random_block_value) in mirror_hash_map.iter() {
         let identifier = address.0;
         let position = address.1;
+        let ordered_evict = rng.gen_bool(probability);
 
         assert_eq!(
-            osam.read(identifier, position).unwrap().unwrap(),
+            osam.read(identifier, position, ordered_evict, &mut rng)
+                .unwrap()
+                .unwrap(),
             *random_block_value
         );
     }
 }
 
-/// Tests the correctness of Path OSAM on a sequence where
-/// 1) the first quarter of writes are locally to the stash
-/// 2) read all of these writes
-/// 3) the last three quarters writes are made to the OSAM
-/// 4) read all remaining writes
+/// Tests the correctness of Path OSAM on a sequence where:
+/// 1) the first quarter of writes are locally to the stash.
+/// 2) read all of these writes.
+/// 3) the last three quarters writes are made to the OSAM.
+/// 4) read all remaining writes.
 pub(crate) fn locally_interspersed_write_and_read<V: OsamBlock, const Z: BucketSize>(
     osam: &mut PathOsam<V, Z>,
     num_operations: usize,
+    probability: f64,
 ) where
     Standard: Distribution<V>,
 {
@@ -199,48 +256,67 @@ pub(crate) fn locally_interspersed_write_and_read<V: OsamBlock, const Z: BucketS
     let mut mirror_hash_map = HashMap::new();
     let quarter = num_operations.checked_div(4).unwrap();
 
-    // Generate the first half of allocs and write a random value
+    // Generate the first half of allocs and write a random value.
     for _ in 0..quarter {
         let address = osam.alloc(&mut rng).unwrap();
         let identifier = address.0;
         let position = address.1;
         let random_block_value = rng.gen::<V>();
+
         mirror_hash_map.insert(address, random_block_value);
         let _ = osam.local_write(identifier, position, random_block_value);
     }
 
-    // Assert reads fetch the proper data block for half the first writes (quarter of all)
+    // Assert reads fetch the proper data block for half the first writes (quarter of all).
     for (address, random_block_value) in mirror_hash_map.iter() {
         let identifier = address.0;
         let position = address.1;
+        let ordered_evict = rng.gen_bool(probability);
+
         assert_eq!(
-            osam.read(identifier, position).unwrap().unwrap(),
+            osam.read(identifier, position, ordered_evict, &mut rng)
+                .unwrap()
+                .unwrap(),
             *random_block_value
         );
     }
     mirror_hash_map.clear();
 
-    // Generate the second half of allocs and write a random value
+    // Generate the second half of allocs and write a random value.
     for _ in quarter..num_operations {
         let address = osam.alloc(&mut rng).unwrap();
         let identifier = address.0;
         let position = address.1;
         let random_block_value = rng.gen::<V>();
+        let ordered_evict = rng.gen_bool(probability);
+
         mirror_hash_map.insert(address, random_block_value);
-        let _ = osam.write(identifier, position, random_block_value, &mut rng);
+        let _ = osam.write(
+            identifier,
+            position,
+            random_block_value,
+            ordered_evict,
+            &mut rng,
+        );
     }
 
-    // Assert the remaining three quarters of reads are correct
+    // Assert the remaining three quarters of reads are correct.
     for (address, random_block_value) in mirror_hash_map.iter() {
         let identifier = address.0;
         let position = address.1;
+        let ordered_evict = rng.gen_bool(probability);
+
         assert_eq!(
-            osam.read(identifier, position).unwrap().unwrap(),
+            osam.read(identifier, position, ordered_evict, &mut rng)
+                .unwrap()
+                .unwrap(),
             *random_block_value
         );
     }
 }
 
+// Runs all OSAM correctness tests.
+// Uses a probability of 0.5 to toggle between deterministic and random eviction.
 macro_rules! create_path_osam_correctness_tests_all_parameters {
     ($prefix: literal, $block_capacity: expr, $block_size: expr, $bucket_size: expr, $overflow_size: expr, $operation_factor: expr) => {
         paste::paste! {
@@ -248,40 +324,43 @@ macro_rules! create_path_osam_correctness_tests_all_parameters {
             fn [<"write_then_read" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor>]() {
                 let mut osam = PathOsam::<BlockValue<$block_size>, $bucket_size>::new_with_parameters($block_capacity, $overflow_size).unwrap();
                 let num_operations = osam.block_capacity() * $bucket_size * $operation_factor + usize::try_from($overflow_size).unwrap().checked_div(2).unwrap();
-                write_then_read(&mut osam, num_operations);
+                write_then_read(&mut osam, num_operations, 0.5);
             }
 
             #[test]
             fn [<"read_then_write" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor>]() {
                 let mut osam = PathOsam::<BlockValue<$block_size>, $bucket_size>::new_with_parameters($block_capacity, $overflow_size).unwrap();
                 let num_operations = osam.block_capacity() * $bucket_size * $operation_factor + usize::try_from($overflow_size).unwrap().checked_div(2).unwrap();
-                read_then_write(&mut osam, num_operations);
+                read_then_write(&mut osam, num_operations, 0.5);
             }
 
             #[test]
             fn [<"interspersed_write_and_read" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor>]() {
                 let mut osam = PathOsam::<BlockValue<$block_size>, $bucket_size>::new_with_parameters($block_capacity, $overflow_size).unwrap();
                 let num_operations = osam.block_capacity() * $bucket_size * $operation_factor + usize::try_from($overflow_size).unwrap().checked_div(2).unwrap();
-                interspersed_write_and_read(&mut osam, num_operations);
+                interspersed_write_and_read(&mut osam, num_operations, 0.5);
             }
 
             #[test]
             fn [<"local_write_then_read" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor>]() {
                 let mut osam = PathOsam::<BlockValue<$block_size>, $bucket_size>::new_with_parameters($block_capacity, $overflow_size).unwrap();
                 let num_operations = osam.block_capacity() * $bucket_size * $operation_factor + usize::try_from($overflow_size).unwrap().checked_div(2).unwrap();
-                local_write_then_read(&mut osam, num_operations);
+                local_write_then_read(&mut osam, num_operations, 0.5);
             }
 
             #[test]
             fn [<"locally_interspersed_write_and_read" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor>]() {
                 let mut osam = PathOsam::<BlockValue<$block_size>, $bucket_size>::new_with_parameters($block_capacity, $overflow_size).unwrap();
                 let num_operations = osam.block_capacity() * $bucket_size * $operation_factor + usize::try_from($overflow_size).unwrap().checked_div(2).unwrap();
-                locally_interspersed_write_and_read(&mut osam, num_operations);
+                locally_interspersed_write_and_read(&mut osam, num_operations, 0.5);
             }
         }
     };
 }
 
+// Runs OSAM correctness tests relevant to small stash size.
+// Uses a probability of 1.0 to always use deterministic eviction,
+// which allows for maintaining a smaller stash.
 macro_rules! create_path_osam_stash_size_correctness_tests_all_parameters {
     ($prefix: literal, $block_capacity: expr, $block_size: expr, $bucket_size: expr, $overflow_size: expr) => {
         paste::paste! {
@@ -289,21 +368,21 @@ macro_rules! create_path_osam_stash_size_correctness_tests_all_parameters {
             fn [<"write_then_read" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size>]() {
                 let mut osam = StashSizeMonitor::<BlockValue<$block_size>, $bucket_size>::new_with_parameters($block_capacity, $overflow_size).unwrap();
                 let num_operations = (osam.block_capacity() * $bucket_size).checked_div(2).unwrap();
-                write_then_read(&mut osam, num_operations);
+                write_then_read(&mut osam, num_operations, 1.0);
             }
 
             #[test]
             fn [<"read_then_write" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size>]() {
                 let mut osam = StashSizeMonitor::<BlockValue<$block_size>, $bucket_size>::new_with_parameters($block_capacity, $overflow_size).unwrap();
                 let num_operations = (osam.block_capacity() * $bucket_size).checked_div(2).unwrap();
-                read_then_write(&mut osam, num_operations);
+                read_then_write(&mut osam, num_operations, 1.0);
             }
 
             #[test]
             fn [<"interspersed_write_and_read" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size>]() {
                 let mut osam = StashSizeMonitor::<BlockValue<$block_size>, $bucket_size>::new_with_parameters($block_capacity, $overflow_size).unwrap();
                 let num_operations = (osam.block_capacity() * $bucket_size).checked_div(2).unwrap();
-                interspersed_write_and_read(&mut osam, num_operations);
+                interspersed_write_and_read(&mut osam, num_operations, 1.0);
             }
         }
     };
@@ -410,7 +489,7 @@ macro_rules! create_path_osam_stash_size_correctness_tests {
     };
 }
 
-// Interface that shares Osam trait to ensure the stash does not overflow with small enough parameters
+// Interface that shares Osam trait to ensure the stash does not overflow with small enough parameters.
 #[derive(Debug)]
 pub(crate) struct StashSizeMonitor<V: OsamBlock, const Z: BucketSize> {
     osam: PathOsam<V, Z>,
@@ -446,20 +525,25 @@ impl<V: OsamBlock, const Z: BucketSize> Osam for StashSizeMonitor<V, Z> {
         identifier: Identifier,
         position: TreeIndex,
         value: V,
+        ordered_evict: bool,
         rng: &mut R,
     ) -> Result<(), OsamError> {
-        let _ = self.osam.write(identifier, position, value, rng)?;
+        let _ = self
+            .osam
+            .write(identifier, position, value, ordered_evict, rng)?;
         let stash_size = self.osam.stash_occupancy();
         assert!(stash_size < 10);
         Ok(())
     }
 
-    fn read(
+    fn read<R: Rng + CryptoRng>(
         &mut self,
         identifier: Identifier,
         position: TreeIndex,
+        ordered_evict: bool,
+        rng: &mut R,
     ) -> Result<Option<V>, OsamError> {
-        let result = self.osam.read(identifier, position)?;
+        let result = self.osam.read(identifier, position, ordered_evict, rng)?;
         let stash_size = self.osam.stash_occupancy();
         assert!(stash_size < 10);
         Ok(result)
