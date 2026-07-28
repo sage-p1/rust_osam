@@ -11,8 +11,7 @@
 use std::collections::HashMap;
 use std::sync::Once;
 static INIT: Once = Once::new();
-use crate::path_osam::PathOsam;
-use crate::{BucketSize, Identifier, Osam, OsamBlock, OsamError, StashSize, TreeIndex};
+use crate::{BucketSize, Identifier, Osam, OsamBlock, OsamError, PathOsam, StashSize, TreeIndex};
 use rand::{
     distributions::{Distribution, Standard},
     rngs::StdRng,
@@ -321,36 +320,72 @@ macro_rules! create_path_osam_correctness_tests_all_parameters {
     ($prefix: literal, $block_capacity: expr, $block_size: expr, $bucket_size: expr, $overflow_size: expr, $operation_factor: expr) => {
         paste::paste! {
             #[test]
-            fn [<"write_then_read" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor>]() {
-                let mut osam = PathOsam::<BlockValue<$block_size>, $bucket_size>::new_with_parameters($block_capacity, $overflow_size).unwrap();
+            fn [<"write_then_read_encrypted" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor>]() {
+                let mut osam = PathOsam::<BlockValue<$block_size>, $bucket_size>::new($block_capacity, $overflow_size, true).unwrap();
                 let num_operations = osam.block_capacity() * $bucket_size * $operation_factor + usize::try_from($overflow_size).unwrap().checked_div(2).unwrap();
                 write_then_read(&mut osam, num_operations, 0.5);
             }
 
             #[test]
-            fn [<"read_then_write" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor>]() {
-                let mut osam = PathOsam::<BlockValue<$block_size>, $bucket_size>::new_with_parameters($block_capacity, $overflow_size).unwrap();
+            fn [<"write_then_read_plaintext" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor>]() {
+                let mut osam = PathOsam::<BlockValue<$block_size>, $bucket_size>::new($block_capacity, $overflow_size, false).unwrap();
+                let num_operations = osam.block_capacity() * $bucket_size * $operation_factor + usize::try_from($overflow_size).unwrap().checked_div(2).unwrap();
+                write_then_read(&mut osam, num_operations, 0.5);
+            }
+
+            #[test]
+            fn [<"read_then_write_encrypted" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor>]() {
+                let mut osam = PathOsam::<BlockValue<$block_size>, $bucket_size>::new($block_capacity, $overflow_size, true).unwrap();
                 let num_operations = osam.block_capacity() * $bucket_size * $operation_factor + usize::try_from($overflow_size).unwrap().checked_div(2).unwrap();
                 read_then_write(&mut osam, num_operations, 0.5);
             }
 
             #[test]
-            fn [<"interspersed_write_and_read" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor>]() {
-                let mut osam = PathOsam::<BlockValue<$block_size>, $bucket_size>::new_with_parameters($block_capacity, $overflow_size).unwrap();
+            fn [<"read_then_write_plaintext" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor>]() {
+                let mut osam = PathOsam::<BlockValue<$block_size>, $bucket_size>::new($block_capacity, $overflow_size, false).unwrap();
+                let num_operations = osam.block_capacity() * $bucket_size * $operation_factor + usize::try_from($overflow_size).unwrap().checked_div(2).unwrap();
+                read_then_write(&mut osam, num_operations, 0.5);
+            }
+
+
+            #[test]
+            fn [<"interspersed_write_and_read_encrypted" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor>]() {
+                let mut osam = PathOsam::<BlockValue<$block_size>, $bucket_size>::new($block_capacity, $overflow_size, true).unwrap();
                 let num_operations = osam.block_capacity() * $bucket_size * $operation_factor + usize::try_from($overflow_size).unwrap().checked_div(2).unwrap();
                 interspersed_write_and_read(&mut osam, num_operations, 0.5);
             }
 
             #[test]
-            fn [<"local_write_then_read" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor>]() {
-                let mut osam = PathOsam::<BlockValue<$block_size>, $bucket_size>::new_with_parameters($block_capacity, $overflow_size).unwrap();
+            fn [<"interspersed_write_and_read_plaintext" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor>]() {
+                let mut osam = PathOsam::<BlockValue<$block_size>, $bucket_size>::new($block_capacity, $overflow_size, false).unwrap();
+                let num_operations = osam.block_capacity() * $bucket_size * $operation_factor + usize::try_from($overflow_size).unwrap().checked_div(2).unwrap();
+                interspersed_write_and_read(&mut osam, num_operations, 0.5);
+            }
+
+            #[test]
+            fn [<"local_write_then_read_encrypted" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor>]() {
+                let mut osam = PathOsam::<BlockValue<$block_size>, $bucket_size>::new($block_capacity, $overflow_size, true).unwrap();
                 let num_operations = osam.block_capacity() * $bucket_size * $operation_factor + usize::try_from($overflow_size).unwrap().checked_div(2).unwrap();
                 local_write_then_read(&mut osam, num_operations, 0.5);
             }
 
             #[test]
-            fn [<"locally_interspersed_write_and_read" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor>]() {
-                let mut osam = PathOsam::<BlockValue<$block_size>, $bucket_size>::new_with_parameters($block_capacity, $overflow_size).unwrap();
+            fn [<"local_write_then_read_plaintext" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor>]() {
+                let mut osam = PathOsam::<BlockValue<$block_size>, $bucket_size>::new($block_capacity, $overflow_size, false).unwrap();
+                let num_operations = osam.block_capacity() * $bucket_size * $operation_factor + usize::try_from($overflow_size).unwrap().checked_div(2).unwrap();
+                local_write_then_read(&mut osam, num_operations, 0.5);
+            }
+
+            #[test]
+            fn [<"locally_interspersed_write_and_read_encrypted" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor>]() {
+                let mut osam = PathOsam::<BlockValue<$block_size>, $bucket_size>::new($block_capacity, $overflow_size, true).unwrap();
+                let num_operations = osam.block_capacity() * $bucket_size * $operation_factor + usize::try_from($overflow_size).unwrap().checked_div(2).unwrap();
+                locally_interspersed_write_and_read(&mut osam, num_operations, 0.5);
+            }
+
+            #[test]
+            fn [<"locally_interspersed_write_and_read_plaintext" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size _ $operation_factor>]() {
+                let mut osam = PathOsam::<BlockValue<$block_size>, $bucket_size>::new($block_capacity, $overflow_size, false).unwrap();
                 let num_operations = osam.block_capacity() * $bucket_size * $operation_factor + usize::try_from($overflow_size).unwrap().checked_div(2).unwrap();
                 locally_interspersed_write_and_read(&mut osam, num_operations, 0.5);
             }
@@ -365,22 +400,43 @@ macro_rules! create_path_osam_stash_size_correctness_tests_all_parameters {
     ($prefix: literal, $block_capacity: expr, $block_size: expr, $bucket_size: expr, $overflow_size: expr) => {
         paste::paste! {
             #[test]
-            fn [<"write_then_read" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size>]() {
-                let mut osam = StashSizeMonitor::<BlockValue<$block_size>, $bucket_size>::new_with_parameters($block_capacity, $overflow_size).unwrap();
+            fn [<"write_then_read_encrypted" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size>]() {
+                let mut osam = StashSizeMonitor::<BlockValue<$block_size>, $bucket_size>::new($block_capacity, $overflow_size, true).unwrap();
                 let num_operations = (osam.block_capacity() * $bucket_size).checked_div(2).unwrap();
                 write_then_read(&mut osam, num_operations, 1.0);
             }
 
             #[test]
-            fn [<"read_then_write" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size>]() {
-                let mut osam = StashSizeMonitor::<BlockValue<$block_size>, $bucket_size>::new_with_parameters($block_capacity, $overflow_size).unwrap();
+            fn [<"write_then_read_plaintext" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size>]() {
+                let mut osam = StashSizeMonitor::<BlockValue<$block_size>, $bucket_size>::new($block_capacity, $overflow_size, false).unwrap();
+                let num_operations = (osam.block_capacity() * $bucket_size).checked_div(2).unwrap();
+                write_then_read(&mut osam, num_operations, 1.0);
+            }
+
+            #[test]
+            fn [<"read_then_write_encrypted" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size>]() {
+                let mut osam = StashSizeMonitor::<BlockValue<$block_size>, $bucket_size>::new($block_capacity, $overflow_size, true).unwrap();
                 let num_operations = (osam.block_capacity() * $bucket_size).checked_div(2).unwrap();
                 read_then_write(&mut osam, num_operations, 1.0);
             }
 
             #[test]
-            fn [<"interspersed_write_and_read" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size>]() {
-                let mut osam = StashSizeMonitor::<BlockValue<$block_size>, $bucket_size>::new_with_parameters($block_capacity, $overflow_size).unwrap();
+            fn [<"read_then_write_plaintext" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size>]() {
+                let mut osam = StashSizeMonitor::<BlockValue<$block_size>, $bucket_size>::new($block_capacity, $overflow_size, false).unwrap();
+                let num_operations = (osam.block_capacity() * $bucket_size).checked_div(2).unwrap();
+                read_then_write(&mut osam, num_operations, 1.0);
+            }
+
+            #[test]
+            fn [<"interspersed_write_and_read_encrypted" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size>]() {
+                let mut osam = StashSizeMonitor::<BlockValue<$block_size>, $bucket_size>::new($block_capacity, $overflow_size, true).unwrap();
+                let num_operations = (osam.block_capacity() * $bucket_size).checked_div(2).unwrap();
+                interspersed_write_and_read(&mut osam, num_operations, 1.0);
+            }
+
+            #[test]
+            fn [<"interspersed_write_and_read_plaintext" $prefix $block_capacity _ $block_size _ $bucket_size _ $overflow_size>]() {
+                let mut osam = StashSizeMonitor::<BlockValue<$block_size>, $bucket_size>::new($block_capacity, $overflow_size, false).unwrap();
                 let num_operations = (osam.block_capacity() * $bucket_size).checked_div(2).unwrap();
                 interspersed_write_and_read(&mut osam, num_operations, 1.0);
             }
@@ -496,12 +552,13 @@ pub(crate) struct StashSizeMonitor<V: OsamBlock, const Z: BucketSize> {
 }
 
 impl<V: OsamBlock, const Z: BucketSize> StashSizeMonitor<V, Z> {
-    pub(crate) fn new_with_parameters(
+    pub(crate) fn new(
         block_capacity: Identifier,
         overflow_size: StashSize,
+        is_encrypted: bool,
     ) -> Result<Self, OsamError> {
         Ok(Self {
-            osam: PathOsam::new_with_parameters(block_capacity, overflow_size).unwrap(),
+            osam: PathOsam::new(block_capacity, overflow_size, is_encrypted).unwrap(),
         })
     }
 }

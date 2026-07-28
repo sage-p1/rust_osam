@@ -9,7 +9,7 @@
 
 use super::stash::ObliviousStash;
 use crate::{
-    bucket::Bucket,
+    backend::Backend,
     utils::{CompleteBinaryTreeIndex, TreeHeight, TreeIndex},
     BucketSize, CounterSize, Identifier, Osam, OsamBlock, OsamError, StashSize,
 };
@@ -54,8 +54,9 @@ pub const DEFAULT_STASH_OVERFLOW_SIZE: StashSize = 40;
 /// The choice Z = 3 is also popular, although the probability of overflow is less well understood.
 #[derive(Debug)]
 pub struct PathOsam<V: OsamBlock, const Z: BucketSize> {
-    /// The underlying untrusted memory that the OSAM is obliviously accessing on behalf of its client.
-    physical_memory: Vec<Bucket<V, Z>>,
+    /// The underlying untrusted memory that the OSAM+ is obliviously accessing on behalf of its client.
+    /// Buckets are either encrypted using `Aes256Gcm` or stored as plaintext.
+    backend: Backend<V, Z>,
     /// The Path OSAM stash.
     stash: ObliviousStash<V>,
     /// The height of the Path OSAM tree data structure.
@@ -93,9 +94,10 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
     /// - `block_capacity` is 0, 1, or is not a power of two.
     /// - `Z` is 0 or 1.
     /// - `overflow_size` is 0.
-    pub fn new_with_parameters(
+    pub fn new(
         block_capacity: Identifier,
         overflow_size: StashSize,
+        is_encrypted: bool,
     ) -> Result<Self, OsamError> {
         log::info!("PathOsam::new(capacity = {})", block_capacity,);
 
@@ -120,16 +122,13 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
             });
         }
 
-        let number_of_nodes = block_capacity;
+        // Initialize backend method for storing physical memory (encrypted or plaintext).
+        let backend = Backend::<V, Z>::new(block_capacity, is_encrypted)?;
+
+        // Initialize stash.
         let height: u64 = (block_capacity.ilog2() - 1).into();
         let path_size = u64::try_from(Z)? * (height + 1);
         let stash = ObliviousStash::new::<Z>(path_size, overflow_size)?;
-
-        // physical_memory holds `block_capacity` buckets, each storing up to Z blocks.
-        // The number of leaves is `block_capacity` / 2, which the original Path ORAM paper's experiments
-        // found was sufficient to keep the stash size small with high probability.
-        let mut physical_memory = Vec::new();
-        physical_memory.resize(usize::try_from(number_of_nodes)?, Bucket::<V, Z>::default());
 
         // Initialize other parameters.
         let identifier_counter: Identifier = 1;
@@ -142,7 +141,7 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
         let round_trip_counter: CounterSize = 0;
 
         Ok(Self {
-            physical_memory,
+            backend,
             stash,
             height,
             identifier_counter,
@@ -194,11 +193,11 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
 
         // Read path containing target block and eviction path.
         self.stash
-            .read_from_path(&mut self.physical_memory, evict_position, evict_position)?;
+            .read_from_path(&mut self.backend, evict_position, evict_position)?;
 
         // Evict blocks from the stash along a single path.
         self.stash
-            .write_to_path(&mut self.physical_memory, evict_position)?;
+            .write_to_path(&mut self.backend, evict_position)?;
 
         // Bookkeeping of OSAM+ stats.
         self.update_stash_stats();
@@ -309,23 +308,8 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
     }
 
     /// Print blocks in physical memory for debug purposes.
-    pub fn print_physical_memory(&self) {
-        println!("Physical Memory: ");
-        for i in 1..(self.physical_memory.len()) {
-            print!("BUCKET {}: ", i);
-            let bucket = self.physical_memory[i];
-            for block in bucket.blocks.iter() {
-                if block.ct_is_dummy().into() {
-                    print!("(dummy) ");
-                } else {
-                    print!(
-                        "({}, {}, {:?}) ",
-                        block.identifier, block.position, block.value
-                    );
-                }
-            }
-            println!();
-        }
+    pub fn print_physical_memory(&mut self) {
+        self.backend.print_physical_memory();
     }
 
     /// Print blocks in stash for debug purposes.
@@ -339,7 +323,7 @@ impl<V: OsamBlock, const Z: BucketSize> Osam for PathOsam<V, Z> {
 
     /// Returns the capacity in blocks of this OSAM.
     fn block_capacity(&self) -> usize {
-        self.physical_memory.len()
+        self.backend.block_capacity()
     }
 
     /// Allocates a valid `Identifier` and `TreeIndex` to be used for reading and writing.
@@ -386,11 +370,11 @@ impl<V: OsamBlock, const Z: BucketSize> Osam for PathOsam<V, Z> {
 
         // Read dummy path and evict path.
         self.stash
-            .read_from_path(&mut self.physical_memory, dummy_position, evict_position)?;
+            .read_from_path(&mut self.backend, dummy_position, evict_position)?;
 
         // Evict blocks from the stash into the path that was just read.
         self.stash
-            .write_to_path(&mut self.physical_memory, evict_position)?;
+            .write_to_path(&mut self.backend, evict_position)?;
 
         // Bookkeeping of OSAM stats
         self.update_stash_stats();
@@ -422,7 +406,7 @@ impl<V: OsamBlock, const Z: BucketSize> Osam for PathOsam<V, Z> {
 
         // Read path containing target block.
         self.stash
-            .read_from_path(&mut self.physical_memory, position, evict_position)?;
+            .read_from_path(&mut self.backend, position, evict_position)?;
 
         // Remove block from stash (and replace with dummy).
         let result = self.stash.read_from_stash(identifier)?;
@@ -430,7 +414,7 @@ impl<V: OsamBlock, const Z: BucketSize> Osam for PathOsam<V, Z> {
         // Evict blocks from the stash into the path that was just read,
         // replacing them with dummy blocks.
         self.stash
-            .write_to_path(&mut self.physical_memory, evict_position)?;
+            .write_to_path(&mut self.backend, evict_position)?;
 
         // Bookkeeping of OSAM stats.
         self.update_stash_stats();

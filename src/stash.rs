@@ -8,7 +8,8 @@
 //! A trait representing a Path OSAM stash.
 
 use crate::{
-    bucket::{Bucket, PathOsamBlock},
+    backend::Backend,
+    bucket::PathOsamBlock,
     utils::{bitonic_sort_by_keys, CompleteBinaryTreeIndex, TreeIndex},
     BucketSize, Identifier, OsamBlock, OsamError, StashSize,
 };
@@ -51,7 +52,7 @@ impl<V: OsamBlock> ObliviousStash<V> {
     // Write server-side path from root to leaf.
     pub fn write_to_path<const Z: BucketSize>(
         &mut self,
-        physical_memory: &mut [Bucket<V, Z>],
+        backend: &mut Backend<V, Z>,
         position: TreeIndex,
     ) -> Result<(), OsamError> {
         let height = position.ct_depth();
@@ -174,13 +175,12 @@ impl<V: OsamBlock> ObliviousStash<V> {
 
         // Write the first Z * height blocks into slots in the tree.
         for depth in 0..=height {
-            let bucket_to_write =
-                &mut physical_memory[usize::try_from(position.ct_node_on_path(depth, height))?];
-            for slot_number in 0..Z {
-                let stash_index = (usize::try_from(depth)?) * Z + slot_number;
-                bucket_to_write.blocks[slot_number] = self.blocks[stash_index];
-                self.blocks[stash_index] = PathOsamBlock::<V>::dummy();
-            }
+            let bucket_index = position.ct_node_on_path(depth, height);
+            backend.write_bucket_to_stash(
+                &mut self.blocks,
+                usize::try_from(bucket_index)?,
+                usize::try_from(depth)?,
+            );
         }
 
         Ok(())
@@ -191,7 +191,7 @@ impl<V: OsamBlock> ObliviousStash<V> {
     /// Any blocks that are overlapping on both paths are downloaded only once.
     pub fn read_from_path<const Z: BucketSize>(
         &mut self,
-        physical_memory: &mut [Bucket<V, Z>],
+        backend: &mut Backend<V, Z>,
         position: TreeIndex,
         evict_position: TreeIndex,
     ) -> Result<(), OsamError> {
@@ -199,29 +199,18 @@ impl<V: OsamBlock> ObliviousStash<V> {
 
         // Download physical memory to stash and replace with dummy blocks.
         let mut checked_buckets = HashSet::new();
+        let mut offset: usize = 0;
         for i in 0..(self.path_size / u64::try_from(Z)?) {
             let bucket_index = usize::try_from(position.ct_node_on_path(i, height))?;
             checked_buckets.insert(bucket_index);
-            let mut bucket = physical_memory[bucket_index];
-            for slot_index in 0..Z {
-                self.blocks[Z * (usize::try_from(i)?) + slot_index] = bucket.blocks[slot_index];
-                bucket.blocks[slot_index] = PathOsamBlock::<V>::dummy();
-            }
-            physical_memory[bucket_index] = bucket;
+            offset = backend.read_bucket_to_stash(&mut self.blocks, bucket_index, offset);
         }
 
         // Download physical memory to stash from evict path, skipping any buckets that were already collected.
-        let offset = usize::try_from(self.path_size)?;
         for i in 1..(self.path_size / u64::try_from(Z)?) {
             let bucket_index = usize::try_from(evict_position.ct_node_on_path(i, height))?;
             if !checked_buckets.contains(&bucket_index) {
-                let mut bucket = physical_memory[bucket_index];
-                for slot_index in 0..Z {
-                    self.blocks[offset + Z * (usize::try_from(i)? - 1) + slot_index] =
-                        bucket.blocks[slot_index];
-                    bucket.blocks[slot_index] = PathOsamBlock::<V>::dummy();
-                }
-                physical_memory[bucket_index] = bucket;
+                offset = backend.read_bucket_to_stash(&mut self.blocks, bucket_index, offset);
             }
         }
 
@@ -312,7 +301,7 @@ impl<V: OsamBlock> ObliviousStash<V> {
 
     /// Print blocks in stash for debug purposes.
     pub fn print_stash(&self) {
-        print!("STASH: ");
+        print!("Stash: ");
         for i in (self.path_size + self.evict_path_size).try_into().unwrap()..self.blocks.len() {
             let block = self.blocks[i];
             if (!block.ct_is_dummy()).into() {

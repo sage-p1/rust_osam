@@ -31,10 +31,11 @@
 //! The below example reads a database from memory into an OSAM, thus permitting secret-dependent accesses.
 //!
 //! ```
-//! use osam::{BlockSize, BlockValue, Identifier, Osam, PathOsam, TreeIndex};
-//! use osam::path_osam::{DEFAULT_BLOCKS_PER_BUCKET, DEFAULT_STASH_OVERFLOW_SIZE};
+//! use osam::{
+//!     path_osam::{DEFAULT_BLOCKS_PER_BUCKET, DEFAULT_STASH_OVERFLOW_SIZE},
+//!     BlockSize, BlockValue, Identifier, Osam, OsamError, PathOsam, TreeIndex
+//! };
 //! use rand::{rngs::OsRng, Rng};
-//! # use osam::OsamError;
 //!
 //! const BLOCK_SIZE: BlockSize = 64;
 //! const DB_SIZE: Identifier = 64;
@@ -43,12 +44,13 @@
 //! let mut rng = rand::rngs::OsRng;
 //! let mut addresses: [(Identifier, TreeIndex); DB_SIZE as usize] =  
 //! [(Identifier::MAX, 0); DB_SIZE as usize];
+//! let is_encrypted = rng.gen_bool(0.5);
 //!
 //! // Initialize an OSAM to store 64 blocks of 64 bytes each.
 //! let mut osam = PathOsam::<
 //!     BlockValue<BLOCK_SIZE>,
 //!     DEFAULT_BLOCKS_PER_BUCKET,
-//!     >::new_with_parameters(DB_SIZE, DEFAULT_STASH_OVERFLOW_SIZE)?;
+//!     >::new(DB_SIZE, DEFAULT_STASH_OVERFLOW_SIZE, is_encrypted)?;
 //!
 //! // Read a database (here, an array of byte arrays) into the OSAM.
 //! for (i, bytes) in DATABASE.iter().enumerate() {
@@ -85,13 +87,16 @@
 //! interface which exposes these parameters.
 //!
 //! ```
-//! use osam::{BlockSize, BlockValue, BucketSize,
-//!             Identifier, Osam, PathOsam, StashSize};
-//! use osam::path_osam::{DEFAULT_BLOCKS_PER_BUCKET, DEFAULT_STASH_OVERFLOW_SIZE};
-//! # use osam::OsamError;
-//! # let mut rng = rand::rngs::OsRng;
-//! # const BLOCK_SIZE: BlockSize = 64;
-//! # const DB_SIZE: Identifier = 64;
+//! use osam::{
+//!     path_osam::{DEFAULT_BLOCKS_PER_BUCKET, DEFAULT_STASH_OVERFLOW_SIZE},
+//!     BlockSize, BlockValue, BucketSize, Identifier, Osam, OsamError, PathOsam, StashSize,
+//! };
+//! use rand::{rngs::OsRng, Rng};
+//!
+//! let mut rng = OsRng;
+//! const BLOCK_SIZE: BlockSize = 64;
+//! const DB_SIZE: Identifier = 64;
+//! let is_encrypted = rng.gen_bool(0.5);
 //!
 //! const BUCKET_SIZE: BucketSize = DEFAULT_BLOCKS_PER_BUCKET;
 //! const INITIAL_STASH_OVERFLOW_SIZE: StashSize = DEFAULT_STASH_OVERFLOW_SIZE;
@@ -99,7 +104,7 @@
 //! let mut osam = PathOsam::<
 //!     BlockValue<BLOCK_SIZE>,
 //!     DEFAULT_BLOCKS_PER_BUCKET,
-//!     >::new_with_parameters(DB_SIZE, DEFAULT_STASH_OVERFLOW_SIZE)?;
+//!     >::new(DB_SIZE, DEFAULT_STASH_OVERFLOW_SIZE, is_encrypted)?;
 //! # Ok::<(), OsamError>(())
 //! ```
 //!
@@ -107,11 +112,13 @@
 
 #![warn(clippy::cargo, clippy::doc_markdown, missing_docs, rustdoc::all)]
 
+use bucket::LowLevelBytes;
 use rand::{CryptoRng, Rng};
 use std::num::TryFromIntError;
 use subtle::ConditionallySelectable;
 use thiserror::Error;
 
+pub(crate) mod backend;
 pub(crate) mod bucket;
 pub mod path_osam;
 pub(crate) mod stash;
@@ -119,9 +126,7 @@ pub(crate) mod stash;
 mod test_utils;
 pub(crate) mod utils;
 
-pub use crate::bucket::BlockValue;
-pub use crate::path_osam::PathOsam;
-pub use crate::utils::TreeIndex;
+pub use crate::{bucket::BlockValue, path_osam::PathOsam, utils::TreeIndex};
 
 /// The numeric type used to specify the size of an OSAM block in bytes.
 pub type BlockSize = usize;
@@ -136,7 +141,7 @@ pub type CounterSize = u64;
 
 /// A "trait alias" for OSAM blocks: the values read and written by OSAMs.
 pub trait OsamBlock:
-    Copy + Clone + std::fmt::Debug + Default + PartialEq + ConditionallySelectable
+    Copy + Clone + std::fmt::Debug + Default + PartialEq + ConditionallySelectable + LowLevelBytes
 {
 }
 
