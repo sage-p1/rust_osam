@@ -21,7 +21,7 @@ use std::collections::HashMap;
 /// Here we adopt the more conservative setting of 4.
 pub const DEFAULT_BLOCKS_PER_BUCKET: BucketSize = 4;
 
-/// The default number of overflow blocks that the Path OSAM stash (and recursive stashes) can store.
+/// The default number of overflow blocks that the Path OSAM stash can store.
 pub const DEFAULT_STASH_OVERFLOW_SIZE: StashSize = 40;
 
 /// A doubly oblivious Path OSAM.
@@ -54,7 +54,7 @@ pub const DEFAULT_STASH_OVERFLOW_SIZE: StashSize = 40;
 /// The choice Z = 3 is also popular, although the probability of overflow is less well understood.
 #[derive(Debug)]
 pub struct PathOsam<V: OsamBlock, const Z: BucketSize> {
-    /// The underlying untrusted memory that the OSAM+ is obliviously accessing on behalf of its client.
+    /// The underlying untrusted memory that the OSAM is obliviously accessing on behalf of its client.
     /// Buckets are either encrypted using `Aes256Gcm` or stored as plaintext.
     backend: Backend<V, Z>,
     /// The Path OSAM stash.
@@ -199,7 +199,7 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
         self.stash
             .write_to_path(&mut self.backend, evict_position)?;
 
-        // Bookkeeping of OSAM+ stats.
+        // Bookkeeping of OSAM stats.
         self.update_stash_stats();
         self.read_counter += 1;
         self.round_trip_counter += 1;
@@ -376,7 +376,7 @@ impl<V: OsamBlock, const Z: BucketSize> Osam for PathOsam<V, Z> {
         self.stash
             .write_to_path(&mut self.backend, evict_position)?;
 
-        // Bookkeeping of OSAM stats
+        // Bookkeeping of OSAM stats.
         self.update_stash_stats();
         self.write_counter += 1;
         self.round_trip_counter += 1;

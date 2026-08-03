@@ -5,12 +5,12 @@
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 // of this source tree. You may select, at your option, one of the above-listed licenses.
 
-//! An example of using Path OSAM to obliviously serve an indexed database.
+//! An example of using OSAM to obliviously serve an indexed database.
 
 extern crate osam;
 use osam::{
-    path_osam::{DEFAULT_BLOCKS_PER_BUCKET, DEFAULT_STASH_OVERFLOW_SIZE},
     BlockSize, BlockValue, Identifier, Osam, OsamError, PathOsam, TreeIndex,
+    DEFAULT_BLOCKS_PER_BUCKET, DEFAULT_STASH_OVERFLOW_SIZE,
 };
 use rand::{rngs::OsRng, Rng};
 
@@ -32,7 +32,7 @@ fn main() -> Result<(), OsamError> {
     let mut addresses: [(Identifier, TreeIndex); DB_SIZE as usize] =
         [(Identifier::MAX, 0); DB_SIZE as usize];
 
-    // Read DATABASE into osam.
+    // Read DATABASE into OSAM.
     for (i, bytes) in DATABASE.iter().enumerate() {
         let address = osam.alloc(&mut rng)?;
         addresses[i] = address;

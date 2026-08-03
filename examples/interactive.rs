@@ -7,10 +7,7 @@
 
 //! A simple interactive demonstration of OSAM.
 
-use osam::{
-    path_osam::{DEFAULT_BLOCKS_PER_BUCKET, DEFAULT_STASH_OVERFLOW_SIZE},
-    Osam, PathOsam,
-};
+use osam::{Osam, PathOsam, DEFAULT_BLOCKS_PER_BUCKET, DEFAULT_STASH_OVERFLOW_SIZE};
 use rand::{rngs::OsRng, Rng};
 use rustyline::{history::FileHistory, Editor};
 
@@ -45,7 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let is_encrypted = rng.gen_bool(0.5);
 
-    // Initialize a Path OSAM storing `capacity` u64s.
+    // Initialize an OSAM storing `capacity` u64s.
     let mut osam = PathOsam::<u64, DEFAULT_BLOCKS_PER_BUCKET>::new(
         capacity,
         DEFAULT_STASH_OVERFLOW_SIZE,

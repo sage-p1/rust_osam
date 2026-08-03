@@ -5,7 +5,7 @@
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 // of this source tree. You may select, at your option, one of the above-listed licenses.
 
-//! Encrypted and plaintext backend options for Path OSAM+.
+//! Encrypted and plaintext backend options for Path OSAM.
 
 use crate::{
     bucket::{Bucket, LowLevelBytes, PathOsamBlock},
@@ -18,7 +18,7 @@ use aes_gcm::{
 use cipher::typenum::U12;
 
 #[derive(Debug)]
-/// The physical memory the OSAM+ interacts with that is encrypted using `Aes256Gcm`.
+/// The physical memory the OSAM interacts with that is encrypted using `Aes256Gcm`.
 struct EncryptedBackend {
     physical_memory: Vec<Vec<u8>>,
     cipher: Aes256Gcm,
@@ -94,7 +94,9 @@ impl EncryptedBackend {
         // `physical_memory`. `decrypt_bucket` always chooses a new unique nonce to avoid repetition.
         // Because the bucket is not uploaded back to the server, `physical_memory` still has the old
         // data corresponding to the old nonce. Decrypting the old data with a new nonce fails, but this
-        // behavior is fine because the data is outdated and need not be recovered.
+        // behavior is fine because the data is outdated and need not be recovered. To avoid decryption
+        // errors or using old data, the other approach is to encrypt a dummy bucket in place of the
+        // single read path.
         let output: Option<Bucket<V, Z>>;
         let result = self.cipher.decrypt(&nonce, ciphertext.as_ref());
         match result {
@@ -138,7 +140,7 @@ impl EncryptedBackend {
         }
     }
 
-    pub fn write_bucket_to_stash<V: OsamBlock, const Z: BucketSize>(
+    pub fn write_bucket_from_stash<V: OsamBlock, const Z: BucketSize>(
         &mut self,
         blocks: &mut [PathOsamBlock<V>],
         bucket_index: usize,
@@ -170,14 +172,14 @@ impl EncryptedBackend {
                     );
                 }
             }
-            self.write_bucket_to_stash::<V, Z>(&mut blocks, i, 0);
+            self.write_bucket_from_stash::<V, Z>(&mut blocks, i, 0);
             println!();
         }
     }
 }
 
 #[derive(Debug)]
-/// The physical memory the OSAM+ interacts with that is not encrypted.
+/// The physical memory the OSAM interacts with that is not encrypted.
 struct PlaintextBackend<V: OsamBlock, const Z: BucketSize> {
     physical_memory: Vec<Bucket<V, Z>>,
 }
@@ -211,7 +213,7 @@ impl<V: OsamBlock, const Z: BucketSize> PlaintextBackend<V, Z> {
         offset + 1
     }
 
-    pub fn write_bucket_to_stash(
+    pub fn write_bucket_from_stash(
         &mut self,
         blocks: &mut [PathOsamBlock<V>],
         bucket_index: usize,
@@ -288,7 +290,7 @@ impl<V: OsamBlock, const Z: BucketSize> Backend<V, Z> {
         }
     }
 
-    pub fn write_bucket_to_stash(
+    pub fn write_bucket_from_stash(
         &mut self,
         blocks: &mut [PathOsamBlock<V>],
         bucket_index: usize,
@@ -296,9 +298,9 @@ impl<V: OsamBlock, const Z: BucketSize> Backend<V, Z> {
     ) {
         match &mut self.0 {
             BackendMethod::Encrypted(e) => {
-                e.write_bucket_to_stash::<V, Z>(blocks, bucket_index, offset)
+                e.write_bucket_from_stash::<V, Z>(blocks, bucket_index, offset)
             }
-            BackendMethod::Plaintext(p) => p.write_bucket_to_stash(blocks, bucket_index, offset),
+            BackendMethod::Plaintext(p) => p.write_bucket_from_stash(blocks, bucket_index, offset),
         }
     }
 

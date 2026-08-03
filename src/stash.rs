@@ -5,7 +5,7 @@
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 // of this source tree. You may select, at your option, one of the above-listed licenses.
 
-//! A trait representing a Path OSAM stash.
+//! A structure of a Path OSAM stash.
 
 use crate::{
     backend::Backend,
@@ -130,12 +130,13 @@ impl<V: OsamBlock> ObliviousStash<V> {
                 }
 
                 // Real blocks that are assigned to the overflow have the assignment `TreeIndex::Max-1` so
-                // they appear at the start of the stash / end of `reserve_space` before any dummy blocks.
-                // Assign dummy blocks to `TreeIndex::Max - 2` to pad out `reserve_space` so they appear
-                // before any real blocks that were assigned to the overflow.
-                let open_reserve_space = reserve_to_fill.ct_ne(&0);
+                // they appear at the start of the stash / end of `path_size + evict_path_size` before any
+                // dummy blocks. Assign dummy blocks to `TreeIndex::Max - 2` to pad out `path_size + evict_path_size`
+                // so they appear before any real blocks that were assigned to the overflow. Otherwise,
+                // real blocks will appear too early and be overwritten by future downloads.
+                let open_space = reserve_to_fill.ct_ne(&0);
                 let reserve_to_fill_decremented = reserve_to_fill.saturating_sub(1);
-                let assign_to_reserve = (!assigned) & open_reserve_space & block_free;
+                let assign_to_reserve = (!assigned) & open_space & block_free;
                 level_assignments[i].conditional_assign(&(TreeIndex::MAX - 2), assign_to_reserve);
                 reserve_to_fill.conditional_assign(&reserve_to_fill_decremented, assign_to_reserve);
             }
@@ -176,7 +177,7 @@ impl<V: OsamBlock> ObliviousStash<V> {
         // Write the first Z * height blocks into slots in the tree.
         for depth in 0..=height {
             let bucket_index = position.ct_node_on_path(depth, height);
-            backend.write_bucket_to_stash(
+            backend.write_bucket_from_stash(
                 &mut self.blocks,
                 usize::try_from(bucket_index)?,
                 usize::try_from(depth)?,
@@ -187,7 +188,7 @@ impl<V: OsamBlock> ObliviousStash<V> {
     }
 
     /// Read a server-side path from root to leaf into the first `path_size` indices.
-    /// Then, read another path  into the next `evict_path_size` indices.
+    /// Then, read another path into the next `evict_path_size` indices.
     /// Any blocks that are overlapping on both paths are downloaded only once.
     pub fn read_from_path<const Z: BucketSize>(
         &mut self,
