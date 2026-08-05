@@ -5,13 +5,13 @@
 // License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 // of this source tree. You may select, at your option, one of the above-listed licenses.
 
-//! An implementation of Oblivious SAM (OSAM) for the secure enclave setting.
+//! An implementation of Oblivious SAM (OSAM).
 //!
 //! ⚠️ **Warning**: This implementation has not been audited. Use at your own risk!
 //!
 //! # Overview
 //!
-//! This crate implements an oblivious SAM protocol (OSAM) for (secure) enclave applications.
+//! This crate implements an oblivious SAM protocol (OSAM).
 //!
 //! * `addr <- Alloc()` generates a fresh address that has not been allocated before.
 //!
