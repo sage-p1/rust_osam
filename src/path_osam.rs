@@ -76,9 +76,10 @@ pub struct PathOsam<V: OsamBlock, const Z: BucketSize> {
     local_write_counter: CounterSize,
     /// The counter tracking the number of reads.
     read_counter: CounterSize,
+    /// The counter tracking the number of reads.
+    evict_counter: CounterSize,
     /// The counter tracking the number of round-trips, which is a defined as one
-    /// instance of reading a path and then writing a path. This should equal
-    /// `write_counter` + `read_counter`.
+    /// instance of reading a path and then writing a path.
     round_trip_counter: CounterSize,
 }
 
@@ -138,6 +139,7 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
         let write_counter: CounterSize = 0;
         let local_write_counter: CounterSize = 0;
         let read_counter: CounterSize = 0;
+        let evict_counter: CounterSize = 0;
         let round_trip_counter: CounterSize = 0;
 
         Ok(Self {
@@ -151,6 +153,7 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
             write_counter,
             local_write_counter,
             read_counter,
+            evict_counter,
             round_trip_counter,
         })
     }
@@ -201,7 +204,7 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
 
         // Bookkeeping of OSAM stats.
         self.update_stash_stats();
-        self.read_counter += 1;
+        self.evict_counter += 1;
         self.round_trip_counter += 1;
 
         Ok(())
@@ -300,6 +303,11 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
     /// Outputs the number of reads.
     pub fn read_counter(&self) -> CounterSize {
         self.read_counter
+    }
+
+    /// Outputs the number of evicts.
+    pub fn evict_counter(&self) -> CounterSize {
+        self.evict_counter
     }
 
     /// Outputs the number of round trips.
