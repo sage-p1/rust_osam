@@ -64,8 +64,8 @@ pub struct PathOsam<V: OsamBlock, const Z: BucketSize> {
     /// The counter that assigns identifiers to Path OSAM blocks.
     // Also serves as the alloc counter.
     identifier_counter: Identifier,
-    /// The counter that deterministically picks which path to evict.
-    evict_counter: CounterSize,
+    /// The counter that deterministically picks which root-to-leaf path to evict.
+    position_counter: CounterSize,
     /// The maximum occupancy (number of real blocks) observed in the stash at once.
     max_occupancy: StashSize,
     /// A mapping of occupancies to the number of occurrences.
@@ -133,7 +133,7 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
 
         // Initialize other parameters.
         let identifier_counter: Identifier = 1;
-        let evict_counter: CounterSize = 0;
+        let position_counter: CounterSize = 0;
         let max_occupancy: StashSize = 0;
         let all_occupancies: HashMap<StashSize, StashSize> = HashMap::new();
         let write_counter: CounterSize = 0;
@@ -147,7 +147,7 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
             stash,
             height,
             identifier_counter,
-            evict_counter,
+            position_counter,
             max_occupancy,
             all_occupancies,
             write_counter,
@@ -212,7 +212,7 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
 
     /// Calculates the next position to evict via reverse-lexicographic ordering.
     fn evict_position(&mut self) -> Result<TreeIndex, OsamError> {
-        let mut evict_position: TreeIndex = self.evict_counter;
+        let mut evict_position: TreeIndex = self.position_counter;
         let height: u32 = self.height.try_into()?;
         let number_of_leaves = 2u64.pow(height);
 
@@ -223,7 +223,7 @@ impl<V: OsamBlock, const Z: BucketSize> PathOsam<V, Z> {
         evict_position = evict_position.checked_shr(64 - height).unwrap_or(0);
         evict_position += number_of_leaves;
 
-        self.evict_counter += 1;
+        self.position_counter += 1;
         Ok(evict_position)
     }
 
